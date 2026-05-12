@@ -31,18 +31,32 @@ class WelcomeScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
-                        Icons.home_repair_service,
-                        color: AppColors.mutedTeal,
-                        size: 28,
+                      Image.asset(
+                        'assets/images/fikrfree_logo.png',
+                        height: 32,
+                        fit: BoxFit.contain,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'FikrFree',
-                        style: TextStyle(
-                          color: AppColors.cardWhite,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(width: 12),
+                      RichText(
+                        text: const TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Fikr',
+                              style: TextStyle(
+                                color: AppColors.cardWhite,
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'Free',
+                              style: TextStyle(
+                                color: AppColors.mutedTeal,
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

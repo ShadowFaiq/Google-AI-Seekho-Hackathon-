@@ -18,6 +18,7 @@ class FikrFreeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'FikrFree',
       theme: AppTheme.lightTheme,
       initialRoute: '/welcome',
