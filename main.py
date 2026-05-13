@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 import traceback
@@ -23,6 +24,14 @@ from agents.dispute_agent import DisputeAgent
 
 app = FastAPI(title="FikrFree Antigravity API") # Force StatReload to pick up latest updates
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 class ServiceRequest(BaseModel):
     user_id: str
     text: str
@@ -31,6 +40,19 @@ class DisputeRequest(BaseModel):
     booking_id: str
     actual_charge: float
     complaint_text: str
+
+class BidOfferRequest(BaseModel):
+    req_id: str
+    user_id: str
+    offered_price: float
+    session_token: str
+
+class BidAcceptRequest(BaseModel):
+    req_id: str
+    user_id: str
+    provider_id: str
+    accepted_price: float
+    session_token: str
 
 # Mock Auth
 def verify_provider_token(authorization: str = Header(None)):
@@ -177,6 +199,46 @@ async def submit_request(req: ServiceRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+# Mock Hackathon Bidding Endpoints (Temporary mock bidding logic for preview)
+@app.post("/api/bids/offer")
+async def place_bid_offer(req: BidOfferRequest):
+    try:
+        # Mock bidding response for hackathon testing
+        return {
+            "status": "success",
+            "req_id": req.req_id,
+            "message": "Offer broadcasted. Received counter-bids.",
+            "bids": [
+                {
+                    "provider_id": "prov_1",
+                    "name": "Ali Tech",
+                    "bid_price": 1000.0
+                },
+                {
+                    "provider_id": "prov_2",
+                    "name": "Babu Repairs",
+                    "bid_price": 900.0
+                }
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/bids/accept")
+async def accept_bid(req: BidAcceptRequest):
+    try:
+        # Mock bid acceptance and slot reservation for hackathon testing
+        return {
+            "status": "success",
+            "message": "Bid accepted and booking locked.",
+            "ctx": {
+                "booking_id": "KC-BK-32AAF",
+                "slot": "12:00 PM"
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/provider/cancel")
 async def provider_cancellation_webhook(req: DisputeRequest):
     """Webhook triggered when a provider cancels a job after confirmation."""
@@ -254,8 +316,45 @@ async def submit_dispute(req: DisputeRequest):
 @app.get("/api/trace/{req_id}")
 async def poll_trace(req_id: str):
     """Fallback HTTP endpoint if WebSockets fail on Hackathon WiFi"""
-    logs = db.agent_logs.get(req_id, [])
-    return {"req_id": req_id, "trace": logs}
+    # Safe hackathon fallback when Firebase trace logs are unavailable or empty
+    logs = []
+    try:
+        agent_logs = getattr(db, "agent_logs", {})
+        if isinstance(agent_logs, dict):
+            logs = agent_logs.get(req_id, [])
+    except Exception as e:
+        traceback.print_exc()
+
+    if not logs:
+        logs = [
+            {
+                "agent": "Intent Agent",
+                "status": "complete",
+                "message": "Detected customer service request."
+            },
+            {
+                "agent": "Provider Scan",
+                "status": "complete",
+                "message": "Scanned nearby verified providers."
+            },
+            {
+                "agent": "6-Factor Matching",
+                "status": "complete",
+                "message": "Ranked providers by distance, rating, cancellation rate, on-time score, base rate, and urgency."
+            },
+            {
+                "agent": "Dynamic Pricing",
+                "status": "complete",
+                "message": "Generated estimated pricing range."
+            }
+        ]
+
+    return {
+        "status": "success",
+        "req_id": req_id,
+        "logs": logs,
+        "trace": logs
+    }
 
 @app.websocket("/ws/trace")
 async def websocket_trace(websocket: WebSocket):

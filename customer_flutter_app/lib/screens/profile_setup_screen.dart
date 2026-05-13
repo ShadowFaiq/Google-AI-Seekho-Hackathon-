@@ -20,7 +20,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -134,8 +134,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       width: 50,
                       height: 50,
                       decoration: BoxDecoration(
-                        color: AppColors.divider.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(8),
+                        color: AppColors.softIvory,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
                       ),
                       padding: const EdgeInsets.all(6),
                       child: Image.asset(
@@ -154,6 +162,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.cardWhite,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.03),
@@ -280,9 +289,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                           foregroundColor: AppColors.mutedTeal,
                           backgroundColor: AppColors.mutedTeal.withValues(alpha: 0.05),
                           side: const BorderSide(color: AppColors.mutedTeal),
-                          minimumSize: const Size(double.infinity, 50),
+                          minimumSize: const Size(double.infinity, 52),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(26),
                           ),
                         ),
                         child: const Row(

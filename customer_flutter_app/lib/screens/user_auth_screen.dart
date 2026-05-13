@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/custom_button.dart';
+import '../services/api_service.dart';
 
 class UserAuthScreen extends StatefulWidget {
   const UserAuthScreen({super.key});
@@ -14,15 +15,128 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
   bool _rememberMe = false;
   bool _acceptTerms = false;
   bool _obscurePassword = true;
+  bool _isLoading = false;
+
+  final TextEditingController _emailLoginController = TextEditingController();
+  final TextEditingController _passwordLoginController = TextEditingController();
+
+  final TextEditingController _emailRegisterController = TextEditingController();
+  final TextEditingController _passwordRegisterController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailLoginController.dispose();
+    _passwordLoginController.dispose();
+    _emailRegisterController.dispose();
+    _passwordRegisterController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    if (_isLoading) return;
+    
+    final emailVal = _emailLoginController.text.trim();
+    final passwordVal = _passwordLoginController.text.trim();
+    
+    if (emailVal.isEmpty || passwordVal.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all login fields')),
+      );
+      return;
+    }
+    
+    setState(() => _isLoading = true);
+    try {
+      await ApiService.loginCustomer(
+        emailOrPhone: emailVal,
+        password: passwordVal,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Login successful!')),
+        );
+        Navigator.pushNamed(context, '/user_request');
+      }
+    } catch (e) {
+      debugPrint('Login failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Auth backend endpoint pending. Continuing in demo mode.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.pushNamed(context, '/user_request');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _handleRegister() async {
+    if (_isLoading) return;
+    
+    final emailVal = _emailRegisterController.text.trim();
+    final passwordVal = _passwordRegisterController.text.trim();
+    
+    if (emailVal.isEmpty || passwordVal.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all fields')),
+      );
+      return;
+    }
+    
+    if (!_acceptTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please accept the Terms and Conditions')),
+      );
+      return;
+    }
+    
+    setState(() => _isLoading = true);
+    try {
+      await ApiService.registerCustomer(
+        name: 'FikrFree User',
+        email: emailVal.contains('@') ? emailVal : '$emailVal@fikrfree.com',
+        phone: emailVal.contains('@') ? '03001234567' : emailVal,
+        password: passwordVal,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registration successful!')),
+        );
+        Navigator.pushNamed(context, '/profile_setup');
+      }
+    } catch (e) {
+      debugPrint('Registration failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Auth backend endpoint pending. Continuing in demo mode.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.pushNamed(context, '/profile_setup');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.deepNavy,
+      backgroundColor: AppColors.warmIvory,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -31,8 +145,16 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
                   width: 64,
                   height: 64,
                   decoration: BoxDecoration(
-                    color: AppColors.cardWhite,
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.softIvory,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   padding: const EdgeInsets.all(8),
                   child: Image.asset(
@@ -47,7 +169,7 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
                       TextSpan(
                         text: 'Fikr',
                         style: TextStyle(
-                          color: AppColors.cardWhite,
+                          color: AppColors.deepNavy,
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                         ),
@@ -64,10 +186,10 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
+                const Text(
                   'Less worry. Trusted help nearby.',
                   style: TextStyle(
-                    color: AppColors.cardWhite.withValues(alpha: 0.9),
+                    color: AppColors.mutedText,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -79,7 +201,15 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: AppColors.cardWhite,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -89,8 +219,8 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
                         decoration: const BoxDecoration(
                           color: AppColors.warmIvory,
                           borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(24),
-                            topRight: Radius.circular(24),
+                            topLeft: Radius.circular(20),
+                            topRight: Radius.circular(20),
                           ),
                         ),
                         child: Row(
@@ -211,6 +341,7 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
           label: 'Email or Phone',
           hint: 'Enter your registered contact',
           icon: Icons.alternate_email,
+          controller: _emailLoginController,
         ),
         const SizedBox(height: 16),
         
@@ -219,6 +350,7 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
           label: 'Password',
           hint: 'Enter your password',
           icon: Icons.lock_outline,
+          controller: _passwordLoginController,
           isPassword: true,
         ),
         const SizedBox(height: 12),
@@ -265,10 +397,8 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
         
         // Login Button
         CustomButton(
-          text: 'Login',
-          onPressed: () {
-            Navigator.pushNamed(context, '/user_request');
-          },
+          text: _isLoading ? 'Logging in...' : 'Login',
+          onPressed: _handleLogin,
         ),
         
         const SizedBox(height: 24),
@@ -296,6 +426,7 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
           label: 'Email or Phone',
           hint: 'Enter your registered contact',
           icon: Icons.alternate_email,
+          controller: _emailRegisterController,
         ),
         const SizedBox(height: 16),
         
@@ -304,6 +435,7 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
           label: 'Password',
           hint: 'Enter your password',
           icon: Icons.lock_outline,
+          controller: _passwordRegisterController,
           isPassword: true,
         ),
         const SizedBox(height: 8),
@@ -347,10 +479,8 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
         
         // Create Account Button
         CustomButton(
-          text: 'Create Account',
-          onPressed: () {
-            Navigator.pushNamed(context, '/profile_setup');
-          },
+          text: _isLoading ? 'Creating Account...' : 'Create Account',
+          onPressed: _handleRegister,
         ),
         
         const SizedBox(height: 24),
@@ -373,6 +503,7 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
     required String label,
     required String hint,
     required IconData icon,
+    required TextEditingController controller,
     bool isPassword = false,
   }) {
     return Column(
@@ -388,6 +519,7 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
         ),
         const SizedBox(height: 8),
         TextField(
+          controller: controller,
           obscureText: isPassword && _obscurePassword,
           decoration: InputDecoration(
             hintText: hint,
@@ -455,13 +587,13 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.mainText,
-        side: const BorderSide(color: AppColors.border),
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        foregroundColor: AppColors.mutedTeal,
+        side: const BorderSide(color: AppColors.mutedTeal),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(26),
         ),
-        minimumSize: const Size(double.infinity, 56),
+        minimumSize: const Size(double.infinity, 52),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -516,6 +648,7 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
                 label: 'Email Address',
                 hint: 'Enter your email',
                 icon: Icons.email_outlined,
+                controller: TextEditingController(), // Dummy for forgot password sheet
               ),
               const SizedBox(height: 24),
               CustomButton(

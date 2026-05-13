@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/status_chip.dart';
+import '../services/api_service.dart';
 
 class TraceVisualizerScreen extends StatefulWidget {
   const TraceVisualizerScreen({super.key});
@@ -11,6 +12,56 @@ class TraceVisualizerScreen extends StatefulWidget {
 }
 
 class _TraceVisualizerScreenState extends State<TraceVisualizerScreen> {
+  String? _reqId;
+  Map<String, dynamic>? _backendResponse;
+  bool _isLoading = false;
+  bool _initialized = false;
+  String? _errorNote;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null) {
+        _reqId = args['req_id'];
+        final ctx = args['ctx'];
+        if (ctx is Map<String, dynamic>) {
+          _backendResponse = ctx;
+        }
+        if (_reqId != null && _reqId != 'FF-92841-A') {
+          _fetchTrace(_reqId!);
+        }
+      }
+      _initialized = true;
+    }
+  }
+
+  Future<void> _fetchTrace(String reqId) async {
+    setState(() {
+      _isLoading = true;
+      _errorNote = null;
+    });
+
+    try {
+      final response = await ApiService.getTrace(reqId);
+      setState(() {
+        final Map<String, dynamic> merged = Map<String, dynamic>.from(_backendResponse ?? {});
+        merged.addAll(response);
+        _backendResponse = merged;
+      });
+    } catch (e) {
+      debugPrint('TraceVisualizerScreen: Failed to fetch trace: $e');
+      setState(() {
+        _errorNote = 'Live backend trace unavailable. Showing demo trace.';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -38,12 +89,26 @@ class _TraceVisualizerScreenState extends State<TraceVisualizerScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Text(
-                            'FikrFree',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.deepNavy,
+                          RichText(
+                            text: const TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: 'Fikr',
+                                  style: TextStyle(
+                                    color: AppColors.deepNavy,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'Free',
+                                  style: TextStyle(
+                                    color: AppColors.mutedTeal,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -96,6 +161,7 @@ class _TraceVisualizerScreenState extends State<TraceVisualizerScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.cardWhite,
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.03),
@@ -156,50 +222,86 @@ class _TraceVisualizerScreenState extends State<TraceVisualizerScreen> {
                   const SizedBox(height: 32),
 
                   // ── Timeline Section ──
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0),
-                    child: Column(
-                      children: [
-                        _buildTimelineItem(
-                          icon: Icons.check,
-                          title: 'Intent Agent',
-                          subtitle: '91% Confidence',
-                          description: 'Detected service need from customer request.',
-                          isComplete: true,
-                          isLast: false,
-                        ),
-                        _buildTimelineItem(
-                          icon: Icons.translate,
-                          title: 'Language Engine',
-                          description: 'Urdu, Roman Urdu, and English input supported.',
-                          isComplete: true,
-                          isLast: false,
-                        ),
-                        _buildTimelineItem(
-                          icon: Icons.person_search_outlined,
-                          title: 'Provider Scan',
-                          description: 'Scanning nearby verified providers. Found 12 eligible helpers within 5km.',
-                          isComplete: true,
-                          isLast: false,
-                        ),
-                        _buildTimelineItem(
-                          icon: Icons.hub_outlined,
-                          title: '6-Factor Matching',
-                          description: 'Ranking by distance, rating, cancellation rate, on-time score, base rate, and urgency.',
-                          isComplete: false,
-                          isRunning: true,
-                          isLast: false,
-                        ),
-                        _buildTimelineItem(
-                          icon: Icons.receipt_long_outlined,
-                          title: 'Receipt Generation',
-                          description: 'Price estimate and service details compiled.',
-                          isComplete: false,
-                          isLast: true,
-                        ),
-                      ],
+                  if (_isLoading) ...[
+                    const SizedBox(height: 40),
+                    const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.mutedTeal),
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: Column(
+                        children: [
+                          if (_errorNote != null) ...[
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              margin: const EdgeInsets.only(bottom: 20),
+                              decoration: BoxDecoration(
+                                color: AppColors.emergencyRed.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.emergencyRed.withValues(alpha: 0.2)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.warning_amber_rounded, color: AppColors.emergencyRed, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _errorNote!,
+                                      style: const TextStyle(
+                                        color: AppColors.emergencyRed,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          _buildTimelineItem(
+                            icon: Icons.check,
+                            title: 'Intent Agent',
+                            subtitle: '91% Confidence',
+                            description: 'Detected service need from customer request.',
+                            isComplete: true,
+                            isLast: false,
+                          ),
+                          _buildTimelineItem(
+                            icon: Icons.translate,
+                            title: 'Language Engine',
+                            description: 'Urdu, Roman Urdu, and English input supported.',
+                            isComplete: true,
+                            isLast: false,
+                          ),
+                          _buildTimelineItem(
+                            icon: Icons.person_search_outlined,
+                            title: 'Provider Scan',
+                            description: 'Scanning nearby verified providers. Found 12 eligible helpers within 5km.',
+                            isComplete: true,
+                            isLast: false,
+                          ),
+                          _buildTimelineItem(
+                            icon: Icons.hub_outlined,
+                            title: '6-Factor Matching',
+                            description: 'Ranking by distance, rating, cancellation rate, on-time score, base rate, and urgency.',
+                            isComplete: false,
+                            isRunning: true,
+                            isLast: false,
+                          ),
+                          _buildTimelineItem(
+                            icon: Icons.receipt_long_outlined,
+                            title: 'Receipt Generation',
+                            description: 'Price estimate and service details compiled.',
+                            isComplete: false,
+                            isLast: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -212,7 +314,13 @@ class _TraceVisualizerScreenState extends State<TraceVisualizerScreen> {
               child: CustomButton(
                 text: 'View Price Breakdown →',
                 onPressed: () {
-                  Navigator.pushNamed(context, '/receipt');
+                  Navigator.pushNamed(
+                    context,
+                    '/receipt',
+                    arguments: {
+                      'backend_response': _backendResponse,
+                    },
+                  );
                 },
               ),
             ),

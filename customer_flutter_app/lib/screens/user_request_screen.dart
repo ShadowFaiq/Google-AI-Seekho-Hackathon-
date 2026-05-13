@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/custom_button.dart';
+import '../services/api_service.dart';
 
 class UserRequestScreen extends StatefulWidget {
   const UserRequestScreen({super.key});
@@ -12,6 +14,7 @@ class UserRequestScreen extends StatefulWidget {
 class _UserRequestScreenState extends State<UserRequestScreen> {
   final TextEditingController _requestController = TextEditingController();
   
+  bool _isLoading = false;
   String _selectedService = 'AC Repair';
   String _selectedTime = 'Today';
   String _selectedBudget = 'Rs. 2000';
@@ -26,29 +29,80 @@ class _UserRequestScreenState extends State<UserRequestScreen> {
   final List<String> _budgets = ['Rs. 1000', 'Rs. 2000', 'Rs. 3000', 'Custom'];
   final List<String> _urgencies = ['Normal', 'Urgent', 'Emergency'];
 
-  void _onPrepareRequest() {
-    final requestData = {
-      'request_id': 'FF-92841-A',
-      'user_id': 'U001',
-      'raw_request': _requestController.text,
-      'service_category': _selectedService,
-      'location': 'Gulberg III, Lahore',
-      'preferred_time': _selectedTime,
-      'budget': 2000,
-      'currency': 'PKR',
-      'urgency': _selectedUrgency,
-      'request_saved_locally': true,
-      'backend_status': 'pending_connection',
-      'llm_status': 'pending_connection',
-      'rag_provider_search_status': 'pending_connection',
-      'provider_ui_status': 'pending_connection',
-    };
+  Future<void> _onPrepareRequest() async {
+    if (_isLoading) return;
 
-    debugPrint('--- LOCAL REQUEST DATA ---');
-    debugPrint(requestData.toString());
-    debugPrint('--------------------------');
+    setState(() {
+      _isLoading = true;
+    });
 
-    Navigator.pushNamed(context, '/trace_visualizer');
+    String requestText = "$_selectedService needed near Gulberg III, Lahore. Budget $_selectedBudget. Urgency $_selectedUrgency. Preferred time $_selectedTime.";
+    if (_requestController.text.trim().isNotEmpty) {
+      requestText += " Details: ${_requestController.text.trim()}";
+    }
+
+    try {
+      final response = await ApiService.submitRequest(
+        userId: "U001",
+        text: requestText,
+      );
+
+      final reqId = response['req_id'] ?? 'FF-92841-A';
+      final sessionToken = response['session_token'] ?? 'mock_session_12345';
+      final ctx = response['ctx'] as Map<String, dynamic>?;
+      final priceBreakdown = ctx != null ? ctx['price_breakdown'] as Map<String, dynamic>? : null;
+      
+      final suggestedPrice = priceBreakdown != null ? (priceBreakdown['suggested_price'] as num?)?.toDouble() : 1000.0;
+      final floorPrice = priceBreakdown != null ? (priceBreakdown['floor_price'] as num?)?.toDouble() : 800.0;
+      final ceilingPrice = priceBreakdown != null ? (priceBreakdown['ceiling_price'] as num?)?.toDouble() : 1500.0;
+
+      if (mounted) {
+        Navigator.pushNamed(
+          context,
+          '/bidding',
+          arguments: {
+            'req_id': reqId,
+            'session_token': sessionToken,
+            'suggested_price': suggestedPrice,
+            'floor_price': floorPrice,
+            'ceiling_price': ceilingPrice,
+            'ctx': ctx,
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint('UserRequestScreen: API submit request failed: $e');
+      if (mounted) {
+        String errMsg = e.toString();
+        if (e is HttpException) {
+          errMsg = e.message;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Request API failed: $errMsg'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        Navigator.pushNamed(
+          context,
+          '/bidding',
+          arguments: {
+            'req_id': 'FF-92841-A',
+            'session_token': 'mock_session_12345',
+            'suggested_price': 1000.0,
+            'floor_price': 800.0,
+            'ceiling_price': 1500.0,
+            'ctx': null,
+          },
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -107,7 +161,7 @@ class _UserRequestScreenState extends State<UserRequestScreen> {
                 const SizedBox(height: 40),
                 
                 CustomButton(
-                  text: 'Prepare My Request →',
+                  text: _isLoading ? 'Preparing request...' : 'Prepare My Request →',
                   onPressed: _onPrepareRequest,
                 ),
                 const SizedBox(height: 20),
@@ -129,22 +183,44 @@ class _UserRequestScreenState extends State<UserRequestScreen> {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: AppColors.cardWhite,
-                borderRadius: BorderRadius.circular(6),
+                color: AppColors.softIvory,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
               ),
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.all(2),
               child: Image.asset(
                 'assets/images/fikrfree_logo.png',
                 fit: BoxFit.contain,
               ),
             ),
             const SizedBox(width: 8),
-            const Text(
-              'FikrFree',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.deepNavy,
+            RichText(
+              text: const TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Fikr',
+                    style: TextStyle(
+                      color: AppColors.deepNavy,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextSpan(
+                    text: 'Free',
+                    style: TextStyle(
+                      color: AppColors.mutedTeal,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -264,6 +340,7 @@ class _UserRequestScreenState extends State<UserRequestScreen> {
       decoration: BoxDecoration(
         color: AppColors.cardWhite,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),

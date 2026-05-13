@@ -31,9 +31,9 @@ class AppTheme {
           backgroundColor: AppColors.mutedTeal,
           foregroundColor: AppColors.cardWhite,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(26),
           ),
           textStyle: const TextStyle(
             fontSize: 16,

@@ -7,6 +7,7 @@ import 'screens/profile_setup_screen.dart';
 import 'screens/user_request_screen.dart';
 import 'screens/trace_visualizer_screen.dart';
 import 'screens/receipt_screen.dart';
+import 'screens/bidding_screen.dart';
 
 void main() {
   runApp(const FikrFreeApp());
@@ -28,6 +29,7 @@ class FikrFreeApp extends StatelessWidget {
         '/auth': (context) => const UserAuthScreen(),
         '/profile_setup': (context) => const ProfileSetupScreen(),
         '/user_request': (context) => const UserRequestScreen(),
+        '/bidding': (context) => const BiddingScreen(),
         '/trace_visualizer': (context) => const TraceVisualizerScreen(),
         '/receipt': (context) => const ReceiptScreen(),
       },

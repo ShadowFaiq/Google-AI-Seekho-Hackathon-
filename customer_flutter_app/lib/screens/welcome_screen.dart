@@ -16,52 +16,93 @@ class WelcomeScreen extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: [
               AppColors.deepNavy,
-              AppColors.inkBlue,
+              AppColors.mutedTeal,
             ],
           ),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Top Brand
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          children: [
+            // Background Glows
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.mutedTeal.withValues(alpha: 0.15),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -50,
+              left: -50,
+              child: Container(
+                width: 250,
+                height: 250,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.inkBlue.withValues(alpha: 0.25),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Image.asset(
-                        'assets/images/fikrfree_logo.png',
-                        height: 32,
-                        fit: BoxFit.contain,
-                      ),
-                      const SizedBox(width: 12),
-                      RichText(
-                        text: const TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Fikr',
-                              style: TextStyle(
-                                color: AppColors.cardWhite,
-                                fontSize: 26,
-                                fontWeight: FontWeight.bold,
-                              ),
+                      // Top Brand
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: AppColors.softIvory,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            TextSpan(
-                              text: 'Free',
-                              style: TextStyle(
-                                color: AppColors.mutedTeal,
-                                fontSize: 26,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            child: Image.asset(
+                              'assets/images/fikrfree_logo.png',
+                              height: 24,
+                              fit: BoxFit.contain,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 12),
+                          RichText(
+                            text: const TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: 'Fikr',
+                                  style: TextStyle(
+                                    color: AppColors.cardWhite,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'Free',
+                                  style: TextStyle(
+                                    color: AppColors.mutedTeal,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 60),
+                      const SizedBox(height: 60),
 
                   // Main Heading
                   Text(
@@ -211,8 +252,10 @@ class WelcomeScreen extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
+      ],
+    ),
+  ),
+);
   }
 
   Widget _buildStatRow({

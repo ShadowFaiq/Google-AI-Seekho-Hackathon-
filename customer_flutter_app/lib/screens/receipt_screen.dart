@@ -7,6 +7,42 @@ class ReceiptScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final backendResponse = args?['backend_response'] as Map<String, dynamic>?;
+
+    String baseServiceFee = 'Rs. 1500';
+    String distanceSurcharge = 'Rs. 300';
+    String urgencyAdjustment = 'Rs. 500';
+    String platformFee = 'Rs. 0';
+    String totalPrice = 'Rs. 2300';
+
+    if (backendResponse != null) {
+      final priceBreakdown = backendResponse['price_breakdown'] as Map<String, dynamic>?;
+      if (priceBreakdown != null) {
+        String formatVal(dynamic val) {
+          if (val is num) {
+            return 'Rs. ${val.toStringAsFixed(0)}';
+          }
+          return 'Rs. $val';
+        }
+        if (priceBreakdown['base_service_fee'] != null) {
+          baseServiceFee = formatVal(priceBreakdown['base_service_fee']);
+        }
+        if (priceBreakdown['distance_surcharge'] != null) {
+          distanceSurcharge = formatVal(priceBreakdown['distance_surcharge']);
+        }
+        if (priceBreakdown['urgency_adjustment'] != null) {
+          urgencyAdjustment = formatVal(priceBreakdown['urgency_adjustment']);
+        }
+        if (priceBreakdown['platform_fee'] != null) {
+          platformFee = formatVal(priceBreakdown['platform_fee']);
+        }
+        if (priceBreakdown['total_price'] != null) {
+          totalPrice = formatVal(priceBreakdown['total_price']);
+        }
+      }
+    }
+
     return Scaffold(
       backgroundColor: AppColors.warmIvory,
       body: SafeArea(
@@ -32,12 +68,13 @@ class ReceiptScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Container(
+                           Container(
                             width: 24,
                             height: 24,
                             decoration: BoxDecoration(
-                              color: AppColors.cardWhite,
-                              borderRadius: BorderRadius.circular(4),
+                              color: AppColors.softIvory,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.border),
                             ),
                             padding: const EdgeInsets.all(2),
                             child: Image.asset(
@@ -46,12 +83,26 @@ class ReceiptScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          const Text(
-                            'FikrFree',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.deepNavy,
+                          RichText(
+                            text: const TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: 'Fikr',
+                                  style: TextStyle(
+                                    color: AppColors.deepNavy,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'Free',
+                                  style: TextStyle(
+                                    color: AppColors.mutedTeal,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -166,8 +217,8 @@ class ReceiptScreen extends StatelessWidget {
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: const [
-                                      Text(
+                                    children: [
+                                      const Text(
                                         'User Budget',
                                         style: TextStyle(
                                           fontSize: 11,
@@ -175,10 +226,10 @@ class ReceiptScreen extends StatelessWidget {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      SizedBox(height: 4),
+                                      const SizedBox(height: 4),
                                       Text(
-                                        'Rs. 2000',
-                                        style: TextStyle(
+                                        totalPrice,
+                                        style: const TextStyle(
                                           fontSize: 15,
                                           color: AppColors.mainText,
                                           fontWeight: FontWeight.bold,
@@ -227,6 +278,7 @@ class ReceiptScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.cardWhite,
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.03),
@@ -258,13 +310,13 @@ class ReceiptScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 20),
                         
-                        _buildReceiptRow('Base service fee', 'Rs. 1500'),
+                        _buildReceiptRow('Base service fee', baseServiceFee),
                         const SizedBox(height: 14),
-                        _buildReceiptRow('Distance surcharge', 'Rs. 300'),
+                        _buildReceiptRow('Distance surcharge', distanceSurcharge),
                         const SizedBox(height: 14),
-                        _buildReceiptRow('Urgency adjustment', 'Rs. 500'),
+                        _buildReceiptRow('Urgency adjustment', urgencyAdjustment),
                         const SizedBox(height: 14),
-                        _buildReceiptRow('Platform/demo fee', 'Rs. 0', isFree: true),
+                        _buildReceiptRow('Platform/demo fee', platformFee, isFree: platformFee.contains('Rs. 0') || platformFee == '0'),
                         
                         const SizedBox(height: 20),
                         const Divider(height: 1, color: AppColors.divider),
@@ -272,8 +324,8 @@ class ReceiptScreen extends StatelessWidget {
 
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
-                            Text(
+                          children: [
+                            const Text(
                               'TOTAL ESTIMATE',
                               style: TextStyle(
                                 fontSize: 14,
@@ -282,8 +334,8 @@ class ReceiptScreen extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              'Rs. 2300',
-                              style: TextStyle(
+                              totalPrice,
+                              style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.mutedTeal,
@@ -336,9 +388,9 @@ class ReceiptScreen extends StatelessWidget {
               right: 20,
               bottom: 20,
               child: CustomButton(
-                text: 'Done',
+                text: 'Back to Dashboard',
                 onPressed: () {
-                  Navigator.popUntil(context, ModalRoute.withName('/welcome'));
+                  Navigator.popUntil(context, ModalRoute.withName('/user_request'));
                 },
               ),
             ),

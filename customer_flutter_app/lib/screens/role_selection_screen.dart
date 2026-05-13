@@ -15,79 +15,118 @@ class RoleSelectionScreen extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: [
               AppColors.deepNavy,
-              AppColors.inkBlue,
+              AppColors.mutedTeal,
             ],
           ),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Top Row: Back Arrow + Brand ──
-                  Row(
+        child: Stack(
+          children: [
+            // Background Glows
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.mutedTeal.withValues(alpha: 0.15),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -50,
+              left: -50,
+              child: Container(
+                width: 250,
+                height: 250,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.inkBlue.withValues(alpha: 0.25),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Back arrow
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.inkBlue.withValues(alpha: 0.6),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color:
-                                  AppColors.mutedTeal.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.arrow_back,
-                            color: AppColors.mutedTeal,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      // Brand
-                      Image.asset(
-                        'assets/images/fikrfree_logo.png',
-                        height: 24,
-                        fit: BoxFit.contain,
-                      ),
-                      const SizedBox(width: 8),
-                      RichText(
-                        text: const TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Fikr',
-                              style: TextStyle(
-                                color: AppColors.cardWhite,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                      // ── Top Row: Back Arrow + Brand ──
+                      Row(
+                        children: [
+                          // Back arrow
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppColors.inkBlue.withValues(alpha: 0.6),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.mutedTeal.withValues(alpha: 0.3),
+                                  width: 1,
+                                ),
                               ),
-                            ),
-                            TextSpan(
-                              text: 'Free',
-                              style: TextStyle(
+                              child: const Icon(
+                                Icons.arrow_back,
                                 color: AppColors.mutedTeal,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                                size: 20,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          const Spacer(),
+                          // Brand
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.softIvory,
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Image.asset(
+                              'assets/images/fikrfree_logo.png',
+                              height: 18,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          RichText(
+                            text: const TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: 'Fikr',
+                                  style: TextStyle(
+                                    color: AppColors.cardWhite,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'Free',
+                                  style: TextStyle(
+                                    color: AppColors.mutedTeal,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          // Invisible spacer to balance the row
+                          const SizedBox(width: 40),
+                        ],
                       ),
-                      const Spacer(),
-                      // Invisible spacer to balance the row
-                      const SizedBox(width: 40),
-                    ],
-                  ),
-                  const SizedBox(height: 36),
+                      const SizedBox(height: 36),
 
                   // ── Title ──
                   RichText(
@@ -214,8 +253,10 @@ class RoleSelectionScreen extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
+      ],
+    ),
+  ),
+);
   }
 
   /// Builds a small dot indicator.

@@ -20,12 +20,12 @@ class CustomButton extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.mutedTeal,
         foregroundColor: AppColors.cardWhite,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(26),
         ),
         elevation: 0,
-        minimumSize: const Size(double.infinity, 56),
+        minimumSize: const Size(double.infinity, 52),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
