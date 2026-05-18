@@ -1,17 +1,24 @@
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, WebSocket, HTTPException, Header, Depends
 from pydantic import BaseModel
 import asyncio
 import traceback
+import time
+from datetime import datetime
 
-from database.mock_firestore import db
-from agents.intent_agent import parse_intent
-from agents.discovery_agent import discover_providers
-from agents.ranking_agent import rank_providers
-from agents.pricing_agent import calculate_price
-from agents.booking_agent import book_service
-from agents.dispute_agent import handle_dispute
+from database.firebase_client import db
+from baseline_engine import BaselineEngine
+from agents.intent_agent import IntentAgent
+from agents.geo_normalization_agent import GeoNormalizationAgent
+from agents.discovery_agent import DiscoveryAgent
+from agents.ranking_agent import RankingAgent
+from agents.scheduling_agent import SchedulingAgent
+from agents.pricing_agent import PricingAgent
+from agents.booking_agent import BookingAgent
+from agents.notification_agent import NotificationAgent
+from agents.service_lifecycle_agent import ServiceLifecycleAgent
+from agents.dispute_agent import DisputeAgent
 
-app = FastAPI(title="KaamConnect API")
+app = FastAPI(title="FikrFree Antigravity API")
 
 class ServiceRequest(BaseModel):
     user_id: str
@@ -22,144 +29,227 @@ class DisputeRequest(BaseModel):
     actual_charge: float
     complaint_text: str
 
+# Mock Auth
+def verify_provider_token(authorization: str = Header(None)):
+    if not authorization or "Bearer mock_token" not in authorization:
+        raise HTTPException(status_code=401, detail="Unauthorized Provider")
+    return True
+
+class TraceEmitter:
+    def __init__(self, websocket: WebSocket = None, req_id: str = None):
+        self.websocket = websocket
+        self.req_id = req_id
+
+    async def emit(self, agent_name: str, ctx: dict, start_time: float):
+        duration_ms = int((time.time() - start_time) * 1000)
+        
+        # Build strict schema for the Trace Visualizer
+        schema = {
+            "agent": agent_name,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "status": "error" if ctx.get("recovery_triggered") else ("halted" if ctx.get("halt") else "completed"),
+            "recovery": ctx.get("recovery_action") if ctx.get("recovery_triggered") else None,
+            "inputs": {"user_input": ctx.get("user_input")},
+            "outputs": {k: v for k, v in ctx.items() if k not in ["user_input", "providers", "ranked_providers", "baseline_ranked", "notification_timeline"]}, # Truncated large objects
+            "decision": f"{agent_name} executed.",
+            "duration_ms": duration_ms
+        }
+        
+        # Populate specific human-readable decisions
+        if agent_name == "IntentAgent":
+            conf = ctx.get('intent', {}).get('confidence_breakdown', {})
+            schema["decision"] = f"Parsed intent. Avg Confidence: {sum(conf.values())/4 if conf else 0}"
+        elif agent_name == "GeoNormalizationAgent":
+            schema["decision"] = f"Normalized location to: {ctx.get('normalized_location', {}).get('address')}"
+        elif agent_name == "DiscoveryAgent":
+            schema["decision"] = f"Found {len(ctx.get('providers', []))} eligible providers (filtered strikes)."
+        elif agent_name == "SchedulingAgent":
+            schema["decision"] = "Calculated dynamic travel buffers using Maps ETA."
+        elif agent_name == "RankingAgent":
+            top = ctx.get("ranked_providers", [{}])[0].get("provider", {}).get("name", "None")
+            schema["decision"] = f"Ranked using 10-factor matrix. Emergency Override: {ctx.get('is_emergency')}. Top: {top}"
+            schema["outputs"]["top_provider"] = top
+        elif agent_name == "PricingAgent":
+            schema["decision"] = "Calculated quote including budget and complexity factors."
+        elif agent_name == "BookingAgent":
+            if ctx.get("recovery_triggered"):
+                schema["decision"] = "Double-booking race condition hit. Triggered recovery."
+            else:
+                schema["decision"] = "Locked slot with Firestore atomic transaction."
+        elif agent_name == "NotificationAgent":
+            schema["decision"] = "Scheduled T-24h to post-service notification timeline."
+        elif agent_name == "ServiceLifecycleAgent":
+            schema["decision"] = f"Simulated lifecycle. User rating: {ctx.get('user_rating')}"
+        elif agent_name == "DisputeAgent":
+            schema["decision"] = "Resolved dispute. Issued strike to Firebase."
+            
+        # Log to DB for HTTP polling fallback
+        if self.req_id:
+            db.add_log(self.req_id, agent_name, schema["status"], schema["decision"], schema)
+            
+        if self.websocket:
+            await self.websocket.send_json(schema)
+            # Simulated visual delay for judges to read the trace
+            await asyncio.sleep(1)
+
+class Orchestrator:
+    pipeline = [
+        IntentAgent, GeoNormalizationAgent, DiscoveryAgent, SchedulingAgent, 
+        RankingAgent, PricingAgent, BookingAgent, NotificationAgent, 
+        ServiceLifecycleAgent
+    ]
+    
+    def __init__(self, trace_emitter: TraceEmitter):
+        self.ws_trace = trace_emitter
+
+    async def run(self, user_input: str, req_id: str, user_id: str):
+        ctx = {
+            "user_input": user_input,
+            "req_id": req_id,
+            "user_id": user_id
+        }
+        
+        # Standard DAG Pipeline
+        for AgentClass in self.pipeline:
+            start_time = time.time()
+            agent = AgentClass(ctx)
+            ctx = await agent.run()
+            await self.ws_trace.emit(agent.name, ctx, start_time)
+            
+            # Handle Failure Recovery Paths
+            if ctx.get("recovery_triggered"):
+                # Discovery Failed -> Expand Radius 5km to 10km
+                if agent.name == "DiscoveryAgent" and ctx.get("recovery_action") == "expand_radius":
+                    ctx["discovery_radius_km"] = 10
+                    ctx["recovery_triggered"] = False
+                    ctx["halt"] = False
+                    ctx = await DiscoveryAgent(ctx).run()
+                    await self.ws_trace.emit("DiscoveryAgent_Radius_Expanded", ctx, time.time())
+                    if not ctx.get("providers"):
+                        # Still nothing? Fallback to tomorrow
+                        ctx["error_msg"] = "No providers available in 10km radius today. Would you like to schedule for tomorrow?"
+                        ctx["halt"] = True
+                        
+                # Booking Failed -> Try next provider
+                elif agent.name == "BookingAgent" and ctx.get("recovery_action") == "offer alternatives":
+                    if ctx.get("ranked_providers"):
+                        ctx["ranked_providers"].pop(0) # Remove unavailable
+                        ctx["recovery_triggered"] = False
+                        ctx["halt"] = False
+                        if ctx["ranked_providers"]:
+                            start_time = time.time()
+                            ctx = await BookingAgent(ctx).run()
+                            await self.ws_trace.emit("BookingAgent_Retry", ctx, start_time)
+            
+            if ctx.get("halt"):
+                return ctx # Clarification loop or error gate
+                
+        # Calculate Baseline Engine Comparison
+        if ctx.get("providers"):
+            baseline_engine = BaselineEngine(ctx["providers"], ctx.get("normalized_location"))
+            ctx["baseline_ranked"] = baseline_engine.calculate_baseline()
+                
+        # Conditional Routing for Dispute Agent
+        if ctx.get("user_rating", 5) <= 2:
+            start_time = time.time()
+            ctx["dispute_trigger"] = "low_rating"
+            agent = DisputeAgent(ctx)
+            ctx = await agent.run()
+            await self.ws_trace.emit("DisputeAgent", ctx, start_time)
+            
+        return ctx
+
 @app.post("/api/request")
 async def submit_request(req: ServiceRequest):
-    """
-    Endpoint to submit a request and run it through the orchestrator synchronously.
-    (Used mostly if WebSocket is not preferred by the client)
-    """
     try:
         req_id = db.save_request(req.user_id, req.text, {})
-        user = db.get_user(req.user_id)
-        if not user:
-             raise HTTPException(status_code=404, detail="User not found")
-        
-        # We will use the 'home' address for this demo
-        user_loc = user["saved_addresses"]["home"]
-        
-        # 1. Intent Parse
-        intent = parse_intent(req.text)
-        db.service_requests[req_id]["parsed_data"] = intent
-        
-        if intent.get("confidence", 0) < 0.6:
-            return {"status": "clarification_needed", "message": "Can you please clarify your request?", "req_id": req_id}
-            
-        # 2. Discover
-        providers = discover_providers(intent.get("service_category", "ac_repair"))
-        if not providers:
-            return {"status": "failed", "message": "No providers found for this category.", "req_id": req_id}
-            
-        # 3. Rank
-        is_emergency = intent.get("is_emergency", False)
-        ranked = rank_providers(providers, user_loc, is_emergency=is_emergency)
-        if not ranked:
-            return {"status": "failed", "message": "No providers match criteria.", "req_id": req_id}
-            
-        best_provider = ranked[0]["provider"]
-        
-        # 4. Pricing
-        price_breakdown = calculate_price(
-            provider_rate=best_provider["base_hourly_rate"],
-            distance_km=ranked[0]["distance_km"],
-            urgency=intent.get("urgency", "medium"),
-            is_emergency=is_emergency
-        )
-        
-        # 5. Book
-        booking_id, slot, notification = book_service(
-            req_id, req.user_id, best_provider, price_breakdown, intent.get("time_preference")
-        )
-        
-        return {
-            "status": "success",
-            "booking_id": booking_id,
-            "provider": best_provider["name"],
-            "slot": slot,
-            "price": price_breakdown,
-            "is_emergency": is_emergency,
-            "logs": db.agent_logs.get(req_id, [])
-        }
+        orchestrator = Orchestrator(TraceEmitter(None, req_id=req_id))
+        ctx = await orchestrator.run(req.text, req_id, req.user_id)
+        return {"status": "success", "req_id": req_id, "ctx": ctx}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/provider/cancel")
+async def provider_cancellation_webhook(req: DisputeRequest):
+    """Webhook triggered when a provider cancels a job after confirmation."""
+    try:
+        # Simulate autonomous reranking and reallocation
+        req_id = req.booking_id # Simplified mock
+        logs = db.agent_logs.get(req_id, [])
+        return {
+            "status": "success",
+            "message": "ProviderCancelEvent triggered. Re-allocating booking to next best candidate.",
+            "recovery_trace": {
+                "agent": "BookingAgent",
+                "status": "error",
+                "recovery": "re-allocated",
+                "decision": "Original provider cancelled. Autonomously re-allocated to secondary candidate."
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/trace/{req_id}")
+async def poll_trace(req_id: str):
+    """Fallback HTTP endpoint if WebSockets fail on Hackathon WiFi"""
+    logs = db.agent_logs.get(req_id, [])
+    return {"req_id": req_id, "trace": logs}
+
 @app.websocket("/ws/trace")
 async def websocket_trace(websocket: WebSocket):
-    """
-    WebSocket endpoint for the Agent Trace Visualizer.
-    Accepts the user request, runs the pipeline with asyncio.sleep to simulate processing time,
-    and streams the reasoning steps back to the frontend.
-    """
     await websocket.accept()
     try:
         data = await websocket.receive_json()
         user_id = data.get("user_id", "usr_789234")
         text = data.get("text", "")
         
-        user = db.get_user(user_id)
-        user_loc = user["saved_addresses"]["home"] if user else {"lat": 31.4697, "lng": 74.4012}
-        
         req_id = db.save_request(user_id, text, {})
         
-        # Step 1: Intent
-        await websocket.send_json({"step": "intent", "status": "processing"})
-        await asyncio.sleep(1) # Simulate think time
-        intent = parse_intent(text)
-        db.add_log(req_id, "IntentAgent", "Extracted Intent", "Parsed natural language into structured JSON.", intent)
-        await websocket.send_json({"step": "intent", "status": "done", "result": intent})
+        orchestrator = Orchestrator(TraceEmitter(websocket, req_id=req_id))
+        ctx = await orchestrator.run(text, req_id, user_id)
         
-        if intent.get("confidence", 0) < 0.6:
-            await websocket.send_json({"step": "clarification", "status": "done", "message": "Low confidence. Please clarify."})
-            return
+        if ctx.get("halt"):
+            await websocket.send_json({"message": ctx.get("error_msg") or "Pipeline halted for clarification."})
+        else:
+            await websocket.send_json({"message": "Pipeline completed successfully."})
             
-        # Step 2: Discovery & Ranking
-        await websocket.send_json({"step": "ranking", "status": "processing"})
-        await asyncio.sleep(1)
-        providers = discover_providers(intent.get("service_category", "ac_repair"))
-        is_emergency = intent.get("is_emergency", False)
-        ranked = rank_providers(providers, user_loc, is_emergency=is_emergency)
-        
-        db.add_log(req_id, "RankingAgent", "Ranked Providers", f"Evaluated {len(providers)} providers. Prioritized Trust Score.", {"top_provider": ranked[0]["provider"]["name"], "score": ranked[0]["score"]})
-        
-        await websocket.send_json({"step": "ranking", "status": "done", "top_result": ranked[0], "is_emergency": is_emergency})
-        best_provider = ranked[0]["provider"]
-        
-        # Step 3: Pricing
-        await websocket.send_json({"step": "pricing", "status": "processing"})
-        await asyncio.sleep(1)
-        price_breakdown = calculate_price(
-            provider_rate=best_provider["base_hourly_rate"],
-            distance_km=ranked[0]["distance_km"],
-            urgency=intent.get("urgency", "medium"),
-            is_emergency=is_emergency
-        )
-        db.add_log(req_id, "PricingAgent", "Calculated Quote", "Applied dynamic pricing formula with distance and urgency.", price_breakdown)
-        await websocket.send_json({"step": "pricing", "status": "done", "breakdown": price_breakdown})
-        
-        # Step 4: Booking
-        await websocket.send_json({"step": "booking", "status": "processing"})
-        await asyncio.sleep(1)
-        booking_id, slot, notification = book_service(
-            req_id, user_id, best_provider, price_breakdown, intent.get("time_preference")
-        )
-        db.add_log(req_id, "BookingAgent", "Booking Confirmed", f"Simulated booking and notification to {best_provider['name']}.", {"booking_id": booking_id, "slot": slot})
-        
-        await websocket.send_json({
-            "step": "final",
-            "status": "success",
-            "booking_id": booking_id,
-            "provider": best_provider["name"],
-            "slot": slot
-        })
-        
     except Exception as e:
         await websocket.send_json({"error": str(e)})
         traceback.print_exc()
 
-@app.post("/api/dispute")
-async def create_dispute(req: DisputeRequest):
-    result = handle_dispute(req.booking_id, req.actual_charge, req.complaint_text)
-    return result
+# ---------------------------------------------------------
+# 4. The Provider Interface (Workload Balancing + Auth)
+# ---------------------------------------------------------
+
+@app.get("/provider/{id}/dashboard", dependencies=[Depends(verify_provider_token)])
+async def get_provider_dashboard(id: str):
+    provider = db.get_provider(id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    
+    return {
+        "provider_id": id,
+        "name": provider.get("name"),
+        "today_jobs": 3,
+        "earnings_today_pkr": 4500,
+        "next_available_slot": "04:00 PM"
+    }
+
+@app.post("/provider/{id}/availability", dependencies=[Depends(verify_provider_token)])
+async def set_provider_availability(id: str, available: bool = True):
+    if db.db:
+        db.db.collection('providers').document(id).update({"is_active": available})
+    return {"status": "success", "message": f"Provider {id} availability set to {available}"}
+
+@app.get("/provider/{id}/demand-forecast", dependencies=[Depends(verify_provider_token)])
+async def get_demand_forecast(id: str):
+    # Mocking Gemini prediction for busy hours
+    return {
+        "predicted_busy_hours": ["09:00 AM", "06:00 PM"],
+        "recommended_slots": ["09:00 AM", "10:00 AM", "06:00 PM", "07:00 PM"],
+        "reasoning": "Gemini predicts high demand for AC repair due to upcoming heatwave."
+    }
 
 if __name__ == "__main__":
     import uvicorn
