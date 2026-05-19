@@ -10,18 +10,6 @@ except Exception as e:
     print(f"Warning: Could not initialize Gemini Client. Make sure GEMINI_API_KEY is set. Error: {e}")
     client = None
 
-import os
-import json
-from google import genai
-from google.genai import types
-
-# Initialize Gemini Client
-try:
-    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-except Exception as e:
-    print(f"Warning: Could not initialize Gemini Client. Make sure GEMINI_API_KEY is set. Error: {e}")
-    client = None
-
 class IntentAgent:
     name = "IntentAgent"
 
@@ -66,7 +54,7 @@ class IntentAgent:
             }}
             """
             try:
-                response = client.models.generate_content(
+                response = await client.aio.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=prompt,
                     config=types.GenerateContentConfig(response_mime_type="application/json")

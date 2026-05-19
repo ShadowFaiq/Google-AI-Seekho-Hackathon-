@@ -48,7 +48,6 @@ The FikrFree backend is a FastAPI application driven by an autonomous Multi-Agen
 ## 📉 3. Drawbacks (Limitations)
 
 * **Single-Node WebSocket State:** Active connections are stored in RAM. If the backend is scaled across multiple servers, clients on different servers won't receive each other's messages.
-* **Synchronous Gemini API dependency:** Network delays to the LLM during intent parsing can add 1-2 seconds of latency.
 * **Mock Provider Bids:** Currently, provider counter-bids are simulated. In production, these must be triggered by active providers responding via the Provider mobile app.
 
 ---
