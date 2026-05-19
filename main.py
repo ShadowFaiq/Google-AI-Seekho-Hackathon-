@@ -23,6 +23,16 @@ from auth import verify_token, get_password_hash, verify_password, create_access
 
 app = FastAPI(title="FikrFree Antigravity API")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 class ServiceRequest(BaseModel):
     user_id: str
     text: str
