@@ -33,6 +33,66 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from firebase_admin import messaging
+from typing import Dict, List
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, booking_id: str):
+        await websocket.accept()
+        if booking_id not in self.active_connections:
+            self.active_connections[booking_id] = []
+        self.active_connections[booking_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, booking_id: str):
+        if booking_id in self.active_connections:
+            self.active_connections[booking_id].remove(websocket)
+            if not self.active_connections[booking_id]:
+                del self.active_connections[booking_id]
+
+    async def send_personal_message(self, message: dict, websocket: WebSocket):
+        await websocket.send_json(message)
+
+    async def broadcast(self, message: dict, booking_id: str):
+        if booking_id in self.active_connections:
+            for connection in self.active_connections[booking_id]:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass
+
+manager = ConnectionManager()
+
+def send_fcm_notification(user_id: str, title: str, body: str, data: dict = None):
+    # Try to fetch from database
+    user = db.get_user(user_id) or db.get_provider(user_id)
+    token = user.get("device_token") if user else None
+    
+    # Fallback to local memory dictionary
+    if not token:
+        token = db.temp_device_tokens.get(user_id)
+
+    if not token:
+        print(f"[PUSH SIMULATION] Target: {user_id} | Title: {title} | Body: {body} (Reason: No device token registered)")
+        return False
+    try:
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=title,
+                body=body,
+            ),
+            token=token,
+            data=data or {}
+        )
+        response = messaging.send(message)
+        print(f"[PUSH SUCCESS] Sent FCM message to {user_id}: {response}")
+        return True
+    except Exception as e:
+        print(f"[PUSH ERROR] Failed to send FCM message to {user_id}: {e}")
+        return False
+
 class ServiceRequest(BaseModel):
     user_id: str
     text: str
@@ -71,6 +131,10 @@ class ProviderRegisterRequest(BaseModel):
     password: str
     service_category: str
     base_hourly_rate: float
+
+class DeviceTokenRequest(BaseModel):
+    user_id: str
+    device_token: str
 
 # Real Auth with Mock fallback for Hackathon backward compatibility
 def verify_provider_token(token_data: dict = Depends(verify_token)):
@@ -318,6 +382,21 @@ async def accept_bid(req: BidAcceptRequest):
             ctx = await NotificationAgent(ctx).run()
             ctx = await ServiceLifecycleAgent(ctx).run()
             
+        booking_id = ctx.get("booking_id", "Unknown")
+        # Trigger FCM Notifications to Customer and Provider
+        send_fcm_notification(
+            user_id=req.user_id,
+            title="Booking Confirmed! 🎉",
+            body=f"Your booking {booking_id} has been confirmed at PKR {req.accepted_price}.",
+            data={"booking_id": booking_id, "type": "booking_confirmation"}
+        )
+        send_fcm_notification(
+            user_id=req.provider_id,
+            title="New Job Assigned! 🛠️",
+            body=f"Your bid for PKR {req.accepted_price} was accepted. Booking ID: {booking_id}.",
+            data={"booking_id": booking_id, "type": "job_assigned"}
+        )
+
         return {"status": "success", "message": "Bid accepted and booking locked.", "ctx": ctx}
     except Exception as e:
         traceback.print_exc()
@@ -403,6 +482,61 @@ async def get_demand_forecast(id: str):
         "recommended_slots": ["09:00 AM", "10:00 AM", "06:00 PM", "07:00 PM"],
         "reasoning": "Gemini predicts high demand for AC repair due to upcoming heatwave."
     }
+
+# ---------------------------------------------------------
+# 5. Real-Time Chat & Notification Endpoints
+# ---------------------------------------------------------
+
+@app.post("/api/notification/register-device-token")
+async def register_device_token(req: DeviceTokenRequest):
+    try:
+        db.update_device_token(req.user_id, req.device_token)
+        return {"status": "success", "message": f"Registered device token for {req.user_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/{booking_id}/history")
+async def get_chat_history_endpoint(booking_id: str):
+    try:
+        messages = db.get_chat_history(booking_id)
+        return {"status": "success", "messages": messages}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.websocket("/ws/chat/{booking_id}/{user_id}")
+async def websocket_chat_endpoint(websocket: WebSocket, booking_id: str, user_id: str):
+    await manager.connect(websocket, booking_id)
+    try:
+        join_msg = {
+            "message_id": f"msg_join_{uuid.uuid4().hex[:4]}",
+            "booking_id": booking_id,
+            "sender_id": "system",
+            "text": f"User {user_id} joined the chat",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await manager.broadcast(join_msg, booking_id)
+        
+        while True:
+            data = await websocket.receive_json()
+            text = data.get("text", "")
+            
+            # Save message to database/memory
+            msg_data = db.save_chat_message(booking_id, user_id, text)
+            
+            # Broadcast message to everyone in the booking chat room
+            await manager.broadcast(msg_data, booking_id)
+    except Exception as e:
+        print(f"WebSocket error for {user_id} on booking {booking_id}: {e}")
+    finally:
+        manager.disconnect(websocket, booking_id)
+        leave_msg = {
+            "message_id": f"msg_leave_{uuid.uuid4().hex[:4]}",
+            "booking_id": booking_id,
+            "sender_id": "system",
+            "text": f"User {user_id} left the chat",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await manager.broadcast(leave_msg, booking_id)
 
 if __name__ == "__main__":
     import uvicorn

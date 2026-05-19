@@ -14,6 +14,8 @@ class FirebaseDB:
     def __init__(self):
         self.temp_users = {}
         self.temp_providers = {}
+        self.temp_chats = {}
+        self.temp_device_tokens = {}
         try:
             # Check if already initialized to prevent errors during hot-reloads
             if not firebase_admin._apps:
@@ -183,6 +185,54 @@ class FirebaseDB:
     def update_booking_status(self, booking_id: str, new_status: str):
         if self.db:
             self.db.collection('bookings').document(booking_id).update({"status": new_status})
+
+    def update_device_token(self, user_id: str, token: str) -> bool:
+        self.temp_device_tokens[user_id] = token
+        # Save to temp dicts for in-memory fallback
+        if user_id in self.temp_users:
+            self.temp_users[user_id]["device_token"] = token
+        if user_id in self.temp_providers:
+            self.temp_providers[user_id]["device_token"] = token
+
+        if self.db:
+            # Check user first, then provider
+            user_doc = self.db.collection('users').document(user_id)
+            if user_doc.get().exists:
+                user_doc.update({"device_token": token})
+                return True
+            provider_doc = self.db.collection('providers').document(user_id)
+            if provider_doc.get().exists:
+                provider_doc.update({"device_token": token})
+                return True
+        return True
+
+    def save_chat_message(self, booking_id: str, sender_id: str, text: str) -> dict:
+        msg_id = f"msg_{uuid.uuid4().hex[:6]}"
+        message_data = {
+            "message_id": msg_id,
+            "booking_id": booking_id,
+            "sender_id": sender_id,
+            "text": text,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        if booking_id not in self.temp_chats:
+            self.temp_chats[booking_id] = []
+        self.temp_chats[booking_id].append(message_data)
+
+        if self.db:
+            self.db.collection('bookings').document(booking_id).collection('messages').document(msg_id).set(message_data)
+        return message_data
+
+    def get_chat_history(self, booking_id: str) -> List[Any]:
+        if not self.db:
+            return self.temp_chats.get(booking_id, [])
+        
+        docs = self.db.collection('bookings').document(booking_id).collection('messages').order_by('timestamp', direction=firestore.Query.ASCENDING).stream()
+        messages = [doc.to_dict() for doc in docs]
+        if not messages:
+            # Fallback to local memory if Firestore collection is empty
+            return self.temp_chats.get(booking_id, [])
+        return messages
 
 # Global instance
 db = FirebaseDB()

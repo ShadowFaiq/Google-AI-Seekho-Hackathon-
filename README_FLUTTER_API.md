@@ -253,3 +253,79 @@ The Provider App handles:
   }
   ```
 * **📱 Where to place in Flutter:** Connect this to the **"Analytics / Demand Map"** screen in the Provider App.
+
+---
+
+## 💬 3. Real-Time Chat (WebSocket Room)
+
+Once a matching provider is selected, both apps (Customer and Provider) can join a real-time messaging room using WebSockets.
+
+* **WebSocket URL:** `ws://<SERVER_IP>:8000/ws/chat/{booking_id}/{user_id}`
+* **Payload sent by Client (JSON):**
+  ```json
+  {
+    "text": "Hello, when will you reach G-13?"
+  }
+  ```
+* **Payload broadcasted by Server (JSON):**
+  ```json
+  {
+    "message_id": "msg_f35a9c",
+    "booking_id": "KC-BK-32AAF",
+    "sender_id": "usr_789234",
+    "text": "Hello, when will you reach G-13?",
+    "timestamp": "2026-05-19T21:20:00Z"
+  }
+  ```
+* **Fetch Chat History (REST API):**
+  * **Endpoint:** `GET /api/chat/{booking_id}/history`
+  * **Response Body (200 OK):**
+    ```json
+    {
+      "status": "success",
+      "messages": [
+        {
+          "message_id": "msg_f35a9c",
+          "booking_id": "KC-BK-32AAF",
+          "sender_id": "usr_789234",
+          "text": "Hello, when will you reach G-13?",
+          "timestamp": "2026-05-19T21:20:00Z"
+        }
+      ]
+    }
+    ```
+* **📱 Where to place in Flutter:** 
+  - Connect the WebSocket when entering the **In-App Chat Screen** using the `web_socket_channel` package.
+  - Call the chat history API to load previous messages before connecting the WebSocket.
+
+---
+
+## 🔔 4. Real-Time Push Notifications (Firebase Cloud Messaging)
+
+Both Customer and Provider apps must register their device tokens with the backend so they can receive real-time push alerts.
+
+* **Register Device Token:**
+  * **Endpoint:** `POST /api/notification/register-device-token`
+  * **Request Body:**
+    ```json
+    {
+      "user_id": "usr_789234",
+      "device_token": "FCM_DEVICE_REGISTRATION_TOKEN_HERE"
+    }
+    ```
+  * **Response Body (200 OK):**
+    ```json
+    {
+      "status": "success",
+      "message": "Registered device token for usr_789234"
+    }
+    ```
+
+* **When do Push Notifications trigger?**
+  1. **New Job Alert:** When a customer accepts a bid, the selected provider receives a push alert instantly ("*New Job Assigned! 🛠️*").
+  2. **Booking Confirmed:** When booking is locked, the customer receives an alert ("*Booking Confirmed! 🎉*").
+  3. **Milestone Alerts:** The orchestrator dispatches updates during lifecycle steps.
+
+* **📱 Where to place in Flutter:** 
+  - Fetch the FCM device token via the `firebase_messaging` package on app startup, and upload it using `register-device-token`.
+
