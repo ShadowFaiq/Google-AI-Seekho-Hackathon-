@@ -19,13 +19,16 @@ def seed_database():
         for doc in docs:
             doc.reference.delete()
 
+    from auth import get_password_hash
+    default_hash = get_password_hash("password123")
+
     # 1. Users
     users = [
-        {"id": "usr_789234", "name": "Faiq Hassan", "email": "faiq@kaamconnect.pk", "phone": "03001234567", "location": {"lat": 31.4697, "lng": 74.4012}, "saved_addresses": {"home": {"lat": 31.4697, "lng": 74.4012}}},
-        {"id": "usr_111111", "name": "Anum Malik", "email": "anum@kaamconnect.pk", "phone": "03009876543", "location": {"lat": 31.4800, "lng": 74.4100}, "saved_addresses": {"home": {"lat": 31.4800, "lng": 74.4100}}},
+        {"id": "usr_789234", "name": "Faiq Hassan", "email": "faiq@kaamconnect.pk", "phone": "03001234567", "location": {"lat": 31.4697, "lng": 74.4012}, "saved_addresses": {"home": {"lat": 31.4697, "lng": 74.4012}}, "hashed_password": default_hash, "role": "customer"},
+        {"id": "usr_111111", "name": "Anum Malik", "email": "anum@kaamconnect.pk", "phone": "03009876543", "location": {"lat": 31.4800, "lng": 74.4100}, "saved_addresses": {"home": {"lat": 31.4800, "lng": 74.4100}}, "hashed_password": default_hash, "role": "customer"},
     ]
     for i in range(8):
-        users.append({"id": f"usr_dummy_{i}", "name": f"Dummy User {i}", "email": f"dummy{i}@test.com", "phone": "03000000000", "location": {"lat": 31.4700, "lng": 74.4000}, "saved_addresses": {"home": {"lat": 31.4700, "lng": 74.4000}}})
+        users.append({"id": f"usr_dummy_{i}", "name": f"Dummy User {i}", "email": f"dummy{i}@test.com", "phone": "03000000000", "location": {"lat": 31.4700, "lng": 74.4000}, "saved_addresses": {"home": {"lat": 31.4700, "lng": 74.4000}}, "hashed_password": default_hash, "role": "customer"})
 
     for u in users:
         db.collection('users').document(u["id"]).set(u)
@@ -36,6 +39,7 @@ def seed_database():
         {
             "id": "prv_ac_1",
             "name": "Ali AC Master",
+            "email": "ali@kaamconnect.pk",
             "service_category": "ac_repair",
             "specialty": "split ac", # Skill specialization
             "is_active": True,
@@ -50,6 +54,7 @@ def seed_database():
         {
             "id": "prv_ac_2",
             "name": "Imran HVAC",
+            "email": "imran@kaamconnect.pk",
             "service_category": "ac_repair",
             "specialty": "window ac",
             "is_active": True,
@@ -64,6 +69,7 @@ def seed_database():
         {
             "id": "prv_ac_3",
             "name": "Zahid Cooling Experts",
+            "email": "zahid@kaamconnect.pk",
             "service_category": "ac_repair",
             "specialty": "central ac",
             "is_active": True,
@@ -82,6 +88,7 @@ def seed_database():
         providers.append({
             "id": f"prv_plumb_{i}",
             "name": f"Plumber {i}",
+            "email": f"plumber{i}@kaamconnect.pk",
             "service_category": "plumbing",
             "specialty": "general",
             "is_active": True,
@@ -95,6 +102,9 @@ def seed_database():
         })
 
     for p in providers:
+        p["hashed_password"] = default_hash
+        p["role"] = "provider"
+        p["strikes"] = p.get("strikes", 0)
         db.collection('providers').document(p["id"]).set(p)
     print("Seeded 10 Providers.")
 
