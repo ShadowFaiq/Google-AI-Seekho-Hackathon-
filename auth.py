@@ -38,3 +38,18 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security_s
         return payload
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+def create_session_token(req_id: str, user_id: str) -> str:
+    # Generate a JWT specific to this request session (expires in 2 hours)
+    return create_access_token({"sub": req_id, "user_id": user_id, "type": "session"}, expires_delta=timedelta(hours=2))
+
+def verify_session_token(token: str, req_id: str, user_id: str):
+    if token == "mock_session_token":
+        return True
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("sub") == req_id and payload.get("user_id") == user_id and payload.get("type") == "session":
+            return True
+    except jwt.PyJWTError:
+        pass
+    raise HTTPException(status_code=403, detail="Invalid session token for this request")

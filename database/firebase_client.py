@@ -24,24 +24,6 @@ class FirebaseDB:
         except Exception as e:
             print(f"Error initializing Firebase: {e}")
             self.db = None
-            
-            # Pre-seed temp data for offline hackathon testing
-            from auth import get_password_hash
-            hashed = get_password_hash("password123")
-            self.temp_providers["prov_1"] = {
-                "id": "prov_1", "name": "Ali Tech", "email": "ali@kaamconnect.pk", "service_category": "ac_repair", "specialty": "general",
-                "is_active": True, "location": {"lat": 31.4750, "lng": 74.4050}, "rating": 4.8,
-                "cancellation_rate": 5, "on_time_score": 98, "base_hourly_rate": 1000, "last_review_days_ago": 2, "strikes": 0, "role": "provider", "hashed_password": hashed
-            }
-            self.temp_providers["prov_2"] = {
-                "id": "prov_2", "name": "Babu Repairs", "email": "babu@kaamconnect.pk", "service_category": "ac_repair", "specialty": "general",
-                "is_active": True, "location": {"lat": 31.4700, "lng": 74.4020}, "rating": 4.5,
-                "cancellation_rate": 10, "on_time_score": 90, "base_hourly_rate": 800, "last_review_days_ago": 10, "strikes": 0, "role": "provider", "hashed_password": hashed
-            }
-            self.temp_users["usr_789234"] = {
-                "id": "usr_789234", "name": "Faiq Hassan", "email": "faiq@kaamconnect.pk", "phone": "03001234567",
-                "location": {"lat": 31.4697, "lng": 74.4012}, "saved_addresses": {"home": {"lat": 31.4697, "lng": 74.4012}}, "role": "customer", "hashed_password": hashed
-            }
 
     def get_user(self, user_id: str) -> Any:
         if not self.db:
@@ -126,9 +108,7 @@ class FirebaseDB:
         return [doc.to_dict() for doc in docs]
     
     def get_provider(self, provider_id: str) -> Any:
-        if not self.db:
-            # Fallback to temp_providers
-            return self.temp_providers.get(provider_id)
+        if not self.db: return None
         doc = self.db.collection('providers').document(provider_id).get()
         return doc.to_dict() if doc.exists else None
 

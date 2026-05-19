@@ -19,7 +19,7 @@ from agents.notification_agent import NotificationAgent
 from agents.service_lifecycle_agent import ServiceLifecycleAgent
 from agents.dispute_agent import DisputeAgent
 
-from auth import verify_token, get_password_hash, verify_password, create_access_token
+from auth import verify_token, get_password_hash, verify_password, create_access_token, create_session_token, verify_session_token
 
 app = FastAPI(title="FikrFree Antigravity API")
 
@@ -36,12 +36,14 @@ class BidOfferRequest(BaseModel):
     req_id: str
     user_id: str
     offered_price: float
+    session_token: str
 
 class BidAcceptRequest(BaseModel):
     req_id: str
     user_id: str
     provider_id: str
     accepted_price: float
+    session_token: str
 
 class RegisterRequest(BaseModel):
     name: str
@@ -266,7 +268,8 @@ async def submit_request(req: ServiceRequest):
         req_id = db.save_request(req.user_id, req.text, {})
         orchestrator = Orchestrator(TraceEmitter(None, req_id=req_id))
         ctx = await orchestrator.run(req.text, req_id, req.user_id)
-        return {"status": "success", "req_id": req_id, "ctx": ctx}
+        session_token = create_session_token(req_id, req.user_id)
+        return {"status": "success", "req_id": req_id, "session_token": session_token, "ctx": ctx}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -274,6 +277,7 @@ async def submit_request(req: ServiceRequest):
 @app.post("/api/bids/offer")
 async def place_bid_offer(req: BidOfferRequest):
     try:
+        verify_session_token(req.session_token, req.req_id, req.user_id)
         # User proposes an initial price to providers
         # Simulate providers responding with counter offers
         # In a real app, this would broadcast via websockets to active providers
@@ -289,6 +293,7 @@ async def place_bid_offer(req: BidOfferRequest):
 @app.post("/api/bids/accept")
 async def accept_bid(req: BidAcceptRequest):
     try:
+        verify_session_token(req.session_token, req.req_id, req.user_id)
         # Recreate context and run only the remaining pipeline (Booking, Notification, Lifecycle)
         ctx = {
             "req_id": req.req_id,

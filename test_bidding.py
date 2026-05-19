@@ -23,6 +23,7 @@ def run_tests():
     print(json.dumps(data1, indent=2))
     
     req_id = data1.get("req_id")
+    session_token = data1.get("session_token")
     ctx = data1.get("ctx", {})
     
     if ctx.get("bidding_status") != "WAITING_FOR_USER_BID":
@@ -40,7 +41,8 @@ def run_tests():
     offer_payload = {
         "req_id": req_id,
         "user_id": "usr_789234",
-        "offered_price": my_offer
+        "offered_price": my_offer,
+        "session_token": session_token
     }
     
     res2 = requests.post(f"{BASE_URL}/api/bids/offer", json=offer_payload)
@@ -60,7 +62,8 @@ def run_tests():
         "req_id": req_id,
         "user_id": "usr_789234",
         "provider_id": chosen_bid["provider_id"],
-        "accepted_price": chosen_bid["bid_price"]
+        "accepted_price": chosen_bid["bid_price"],
+        "session_token": session_token
     }
     
     res3 = requests.post(f"{BASE_URL}/api/bids/accept", json=accept_payload)
