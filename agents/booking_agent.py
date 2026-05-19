@@ -43,8 +43,24 @@ class BookingAgent:
             self.ctx["halt"] = True
             return self.ctx
             
-        top_provider = ranked_providers[0]["provider"]
+        # In a bidding system, use the accepted provider from context, fallback to top provider
+        accepted_provider_id = self.ctx.get("accepted_provider_id")
+        
+        top_provider = None
+        if accepted_provider_id:
+            for entry in ranked_providers:
+                if entry["provider"].get("id") == accepted_provider_id:
+                    top_provider = entry["provider"]
+                    break
+                    
+        if not top_provider:
+            top_provider = ranked_providers[0]["provider"]
+            
         price_breakdown = self.ctx.get("price_breakdown", {})
+        accepted_price = self.ctx.get("accepted_price")
+        if accepted_price:
+            price_breakdown["accepted_bid_price"] = accepted_price
+            price_breakdown["total_price"] = accepted_price
         
         # Scheduling Agent assigned an earliest_slot
         selected_slot = top_provider.get("earliest_slot")

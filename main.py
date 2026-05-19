@@ -29,6 +29,16 @@ class DisputeRequest(BaseModel):
     actual_charge: float
     complaint_text: str
 
+class BidOfferRequest(BaseModel):
+    req_id: str
+    user_id: str
+    offered_price: float
+
+class BidAcceptRequest(BaseModel):
+    req_id: str
+    user_id: str
+    provider_id: str
+    accepted_price: float
 # Mock Auth
 def verify_provider_token(authorization: str = Header(None)):
     if not authorization or "Bearer mock_token" not in authorization:
@@ -66,7 +76,8 @@ class TraceEmitter:
         elif agent_name == "SchedulingAgent":
             schema["decision"] = "Calculated dynamic travel buffers using Maps ETA."
         elif agent_name == "RankingAgent":
-            top = ctx.get("ranked_providers", [{}])[0].get("provider", {}).get("name", "None")
+            rp = ctx.get("ranked_providers", [])
+            top = rp[0].get("provider", {}).get("name", "None") if rp else "None"
             schema["decision"] = f"Ranked using 10-factor matrix. Emergency Override: {ctx.get('is_emergency')}. Top: {top}"
             schema["outputs"]["top_provider"] = top
         elif agent_name == "PricingAgent":
@@ -166,6 +177,43 @@ async def submit_request(req: ServiceRequest):
         orchestrator = Orchestrator(TraceEmitter(None, req_id=req_id))
         ctx = await orchestrator.run(req.text, req_id, req.user_id)
         return {"status": "success", "req_id": req_id, "ctx": ctx}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/bids/offer")
+async def place_bid_offer(req: BidOfferRequest):
+    try:
+        # User proposes an initial price to providers
+        # Simulate providers responding with counter offers
+        # In a real app, this would broadcast via websockets to active providers
+        mock_provider_bids = [
+            {"provider_id": "prov_1", "bid_price": req.offered_price + 150, "name": "Ali Tech"},
+            {"provider_id": "prov_2", "bid_price": req.offered_price + 50, "name": "Babu Repairs"}
+        ]
+        return {"status": "success", "req_id": req.req_id, "message": "Offer broadcasted. Received counter-bids.", "bids": mock_provider_bids}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/bids/accept")
+async def accept_bid(req: BidAcceptRequest):
+    try:
+        # Recreate context and run only the remaining pipeline (Booking, Notification, Lifecycle)
+        ctx = {
+            "req_id": req.req_id,
+            "user_id": req.user_id,
+            "accepted_provider_id": req.provider_id,
+            "accepted_price": req.accepted_price,
+            "ranked_providers": [{"provider": {"id": req.provider_id, "name": "Selected Provider", "phone": "03001234567"}}]
+        }
+        
+        ctx = await BookingAgent(ctx).run()
+        if not ctx.get("halt"):
+            ctx = await NotificationAgent(ctx).run()
+            ctx = await ServiceLifecycleAgent(ctx).run()
+            
+        return {"status": "success", "message": "Bid accepted and booking locked.", "ctx": ctx}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

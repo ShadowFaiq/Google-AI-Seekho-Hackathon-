@@ -48,14 +48,25 @@ class PricingAgent:
             
         total = (base_rate * urgency_multiplier) + distance_surcharge + complexity_premium - loyalty_discount
         
+        # InDrive Bidding System Bounds
+        suggested_price = round(total, 2)
+        floor_price = round(suggested_price * 0.8, 2)  # User cannot go below 80% of calculated price
+        ceiling_price = round(suggested_price * 1.5, 2) # Providers cannot ask more than 150%
+
         price_breakdown = {
             "base_rate": base_rate,
             "distance_surcharge": round(distance_surcharge, 2),
             "urgency_multiplier": urgency_multiplier,
             "complexity_premium": complexity_premium,
             "loyalty_discount": loyalty_discount,
-            "total_price": round(total, 2)
+            "suggested_price": suggested_price,
+            "floor_price": floor_price,
+            "ceiling_price": ceiling_price
         }
         
         self.ctx["price_breakdown"] = price_breakdown
+        
+        # Halt the pipeline here so the user can review prices and place a bid
+        self.ctx["halt"] = True
+        self.ctx["bidding_status"] = "WAITING_FOR_USER_BID"
         return self.ctx

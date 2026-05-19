@@ -29,7 +29,19 @@ class FirebaseDB:
         return doc.to_dict() if doc.exists else None
 
     def get_providers_by_category(self, category: str) -> List[Any]:
-        if not self.db: return []
+        if not self.db: 
+            return [
+                {
+                    "id": "prov_1", "name": "Ali Tech", "service_category": category, "specialty": "general",
+                    "is_active": True, "location": {"lat": 31.4750, "lng": 74.4050}, "rating": 4.8,
+                    "cancellation_rate": 5, "on_time_score": 98, "base_hourly_rate": 1000, "last_review_days_ago": 2, "strikes": 0
+                },
+                {
+                    "id": "prov_2", "name": "Babu Repairs", "service_category": category, "specialty": "general",
+                    "is_active": True, "location": {"lat": 31.4700, "lng": 74.4020}, "rating": 4.5,
+                    "cancellation_rate": 10, "on_time_score": 90, "base_hourly_rate": 800, "last_review_days_ago": 10, "strikes": 0
+                }
+            ]
         docs = self.db.collection('providers').where('service_category', '==', category).where('is_active', '==', True).where('strikes', '<', 2).stream()
         return [doc.to_dict() for doc in docs]
     
