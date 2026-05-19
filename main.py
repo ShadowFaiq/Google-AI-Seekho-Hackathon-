@@ -93,6 +93,34 @@ def send_fcm_notification(user_id: str, title: str, body: str, data: dict = None
         print(f"[PUSH ERROR] Failed to send FCM message to {user_id}: {e}")
         return False
 
+try:
+    from twilio.rest import Client as TwilioClient
+except ImportError:
+    TwilioClient = None
+
+def send_sms_notification(to_phone: str, message: str) -> bool:
+    import os
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    from_number = os.getenv("TWILIO_FROM_NUMBER")
+    
+    if not TwilioClient or not account_sid or not auth_token or not from_number:
+        print(f"[SMS SIMULATION] To: {to_phone} | Message: {message} (Reason: Twilio credentials not set or package missing)")
+        return False
+        
+    try:
+        client = TwilioClient(account_sid, auth_token)
+        msg = client.messages.create(
+            body=message,
+            from_=from_number,
+            to=to_phone
+        )
+        print(f"[SMS SUCCESS] Message SID: {msg.sid}")
+        return True
+    except Exception as e:
+        print(f"[SMS ERROR] Failed to send Twilio message: {e}")
+        return False
+
 class ServiceRequest(BaseModel):
     user_id: str
     text: str
@@ -396,6 +424,12 @@ async def accept_bid(req: BidAcceptRequest):
             body=f"Your bid for PKR {req.accepted_price} was accepted. Booking ID: {booking_id}.",
             data={"booking_id": booking_id, "type": "job_assigned"}
         )
+
+        # Trigger SMS Notification to Provider as offline network fallback
+        provider_profile = db.get_provider(req.provider_id)
+        to_phone = provider_profile.get("phone", "03001234567") if provider_profile else "03001234567"
+        sms_text = f"FikrFree: Apka bid PKR {req.accepted_price} accept ho gya hai! Booking ID: {booking_id}."
+        send_sms_notification(to_phone, sms_text)
 
         return {"status": "success", "message": "Bid accepted and booking locked.", "ctx": ctx}
     except Exception as e:
