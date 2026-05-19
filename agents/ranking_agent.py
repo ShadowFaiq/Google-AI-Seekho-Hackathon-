@@ -49,13 +49,13 @@ class RankingAgent:
 
     async def run(self) -> dict:
         providers = self.ctx.get("providers", [])
-        intent = self.ctx.get("intent", {})
+        intent = self.ctx.get("intent") or {}
         
         # User loc now comes from GeoNormalizationAgent
         user_loc = self.ctx.get("normalized_location", intent.get("user_location", {"lat": 31.4697, "lng": 74.4012}))
         is_emergency = self.ctx.get("is_emergency", False)
         
-        required_subtype = intent.get("service_subtype", "").lower()
+        required_subtype = (intent.get("service_subtype") or "").lower()
         budget = intent.get("budget")
         
         # Determine max/min for normalization

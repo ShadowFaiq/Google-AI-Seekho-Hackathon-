@@ -9,14 +9,26 @@ class DiscoveryAgent:
     def __init__(self, ctx: dict):
         self.ctx = ctx
 
+    def _calculate_distance(self, loc1, loc2):
+        import math
+        dx = (loc1.get('lng', 0) - loc2.get('lng', 0)) * 111
+        dy = (loc1.get('lat', 0) - loc2.get('lat', 0)) * 111
+        return math.sqrt(dx*dx + dy*dy)
+
     def _filter_by_radius(self, all_providers, radius_km):
-        """Mock spatial filter — in production this would use Firestore geo-queries."""
-        if radius_km <= 5:
-            return [p for p in all_providers if p.get("id") in ["prov_1", "prov_2"]]
-        elif radius_km <= 10:
-            return all_providers  # 10km gets all
-        else:
-            return all_providers  # nearby city fallback gets all too
+        """Dynamic spatial filter calculating distance using latitude/longitude."""
+        intent = self.ctx.get("intent", {})
+        user_loc = self.ctx.get("normalized_location", intent.get("user_location", {"lat": 31.4697, "lng": 74.4012}))
+        
+        filtered = []
+        for p in all_providers:
+            p_loc = p.get("location")
+            if not p_loc or not isinstance(p_loc, dict):
+                continue
+            dist = self._calculate_distance(p_loc, user_loc)
+            if dist <= radius_km:
+                filtered.append(p)
+        return filtered
 
     async def run(self) -> dict:
         intent = self.ctx.get("intent", {})
@@ -39,7 +51,7 @@ class DiscoveryAgent:
                 # Step 1: Expand radius to 10km
                 self.ctx["discovery_radius_km"] = 10
                 self.ctx["recovery_triggered"] = True
-                self.ctx["recovery_action"] = "expand_radius_10km"
+                self.ctx["recovery_action"] = "expand_radius"
                 self.ctx["error_msg"] = "No providers in 5km. Expanding search to 10km..."
 
             elif recovery_step == 2:

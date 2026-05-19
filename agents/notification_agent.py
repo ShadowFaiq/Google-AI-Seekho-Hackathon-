@@ -23,7 +23,7 @@ class NotificationAgent:
         # Adaptive Timelines Logic
         # If preferred time isn't explicitly set, assume it's roughly 2 hours from now for mock
         intent = self.ctx.get("intent", {})
-        pref_time_str = intent.get("preferred_time", "")
+        pref_time_str = intent.get("preferred_time") or ""
         
         hours_until_job = 2 # default fallback
         if "tomorrow" in pref_time_str.lower():
