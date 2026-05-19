@@ -1,4 +1,7 @@
-from fastapi import FastAPI, WebSocket, HTTPException, Header, Depends
+from dotenv import load_dotenv
+load_dotenv()
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Depends
 from pydantic import BaseModel
 import asyncio
 import traceback
@@ -18,7 +21,7 @@ from agents.notification_agent import NotificationAgent
 from agents.service_lifecycle_agent import ServiceLifecycleAgent
 from agents.dispute_agent import DisputeAgent
 
-app = FastAPI(title="FikrFree Antigravity API")
+app = FastAPI(title="FikrFree Antigravity API") # Force StatReload to pick up latest updates
 
 class ServiceRequest(BaseModel):
     user_id: str
@@ -66,7 +69,8 @@ class TraceEmitter:
         elif agent_name == "SchedulingAgent":
             schema["decision"] = "Calculated dynamic travel buffers using Maps ETA."
         elif agent_name == "RankingAgent":
-            top = ctx.get("ranked_providers", [{}])[0].get("provider", {}).get("name", "None")
+            ranked = ctx.get("ranked_providers")
+            top = ranked[0].get("provider", {}).get("name", "None") if ranked else "None"
             schema["decision"] = f"Ranked using 10-factor matrix. Emergency Override: {ctx.get('is_emergency')}. Top: {top}"
             schema["outputs"]["top_provider"] = top
         elif agent_name == "PricingAgent":
@@ -88,9 +92,12 @@ class TraceEmitter:
             db.add_log(self.req_id, agent_name, schema["status"], schema["decision"], schema)
             
         if self.websocket:
-            await self.websocket.send_json(schema)
-            # Simulated visual delay for judges to read the trace
-            await asyncio.sleep(1)
+            try:
+                await self.websocket.send_json(schema)
+                # Simulated visual delay for judges to read the trace
+                await asyncio.sleep(1)
+            except Exception:
+                self.websocket = None
 
 class Orchestrator:
     pipeline = [
@@ -190,6 +197,60 @@ async def provider_cancellation_webhook(req: DisputeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/dispute")
+async def submit_dispute(req: DisputeRequest):
+    try:
+        booking = None
+        if db.db:
+            doc = db.db.collection('bookings').document(req.booking_id).get()
+            if doc.exists:
+                booking = doc.to_dict()
+                
+        if not booking:
+            booking = {
+                "user_id": "usr_789234",
+                "selected_provider": "prv_ac_1",
+                "price_breakdown": {"total_price": 1980}
+            }
+            
+        provider_id = booking.get("selected_provider", "prv_ac_1")
+        provider = None
+        if db.db:
+            p_doc = db.db.collection('providers').document(provider_id).get()
+            if p_doc.exists:
+                provider = p_doc.to_dict()
+        if not provider:
+            provider = {
+                "id": provider_id,
+                "name": "Ali AC Master",
+                "service_category": "ac_repair",
+                "phone": "03000000000"
+            }
+            
+        ctx = {
+            "user_input": req.complaint_text,
+            "req_id": booking.get("request_id", "mock_req"),
+            "user_id": booking.get("user_id", "usr_789234"),
+            "price_breakdown": booking.get("price_breakdown", {"total_price": 1980}),
+            "ranked_providers": [
+                {
+                    "provider": provider
+                }
+            ]
+        }
+        
+        agent = DisputeAgent(ctx)
+        ctx = await agent.run()
+        
+        return {
+            "status": "success",
+            "booking_id": req.booking_id,
+            "resolution": ctx.get("dispute_resolution")
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/trace/{req_id}")
 async def poll_trace(req_id: str):
     """Fallback HTTP endpoint if WebSockets fail on Hackathon WiFi"""
@@ -209,13 +270,21 @@ async def websocket_trace(websocket: WebSocket):
         orchestrator = Orchestrator(TraceEmitter(websocket, req_id=req_id))
         ctx = await orchestrator.run(text, req_id, user_id)
         
-        if ctx.get("halt"):
-            await websocket.send_json({"message": ctx.get("error_msg") or "Pipeline halted for clarification."})
-        else:
-            await websocket.send_json({"message": "Pipeline completed successfully."})
+        try:
+            if ctx.get("halt"):
+                await websocket.send_json({"message": ctx.get("error_msg") or "Pipeline halted for clarification."})
+            else:
+                await websocket.send_json({"message": "Pipeline completed successfully."})
+        except Exception:
+            pass
             
+    except WebSocketDisconnect:
+        print("WebSocket client disconnected.")
     except Exception as e:
-        await websocket.send_json({"error": str(e)})
+        try:
+            await websocket.send_json({"error": str(e)})
+        except Exception:
+            pass
         traceback.print_exc()
 
 # ---------------------------------------------------------

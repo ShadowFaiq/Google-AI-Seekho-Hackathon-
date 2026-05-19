@@ -30,8 +30,14 @@ class FirebaseDB:
 
     def get_providers_by_category(self, category: str) -> List[Any]:
         if not self.db: return []
-        docs = self.db.collection('providers').where('service_category', '==', category).where('is_active', '==', True).where('strikes', '<', 2).stream()
-        return [doc.to_dict() for doc in docs]
+        docs = self.db.collection('providers').where('service_category', '==', category).stream()
+        providers = []
+        for doc in docs:
+            p = doc.to_dict()
+            p["id"] = doc.id
+            if p.get("is_active", True) and p.get("strikes", 0) < 2:
+                providers.append(p)
+        return providers
     
     def get_provider(self, provider_id: str) -> Any:
         if not self.db: return None
@@ -40,10 +46,17 @@ class FirebaseDB:
 
     def get_last_job(self, provider_id: str) -> Any:
         if not self.db: return None
-        docs = self.db.collection('bookings').where('selected_provider', '==', provider_id).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(1).stream()
-        for doc in docs:
-            return doc.to_dict()
-        return None
+        try:
+            docs = self.db.collection('bookings').where('selected_provider', '==', provider_id).stream()
+            bookings = [doc.to_dict() for doc in docs]
+            if not bookings:
+                return None
+            # Client-side sort by timestamp descending to avoid needing a Firestore composite index
+            bookings.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+            return bookings[0]
+        except Exception as e:
+            print(f"Error in get_last_job: {e}. Falling back.")
+            return None
 
     def increment_provider_strikes(self, provider_id: str):
         if self.db:

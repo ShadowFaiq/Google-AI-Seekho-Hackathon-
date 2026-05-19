@@ -1,0 +1,68 @@
+# Implementation Plan: Bulletproof Testing & Bug Fixes
+
+We will establish a dedicated, comprehensive test suite inside a new folder, resolve critical bugs in `DiscoveryAgent` and `firebase_client.py`, implement the missing `/api/dispute` endpoint, and write validation scripts to ensure the backend and Flutter frontend are fully ready for the hackathon judges.
+
+## Goal Description
+The user wants to separate test scenarios into a dedicated folder and test the system for bugs. Our analysis revealed:
+1. **DiscoveryAgent Radius Bug**: The `_filter_by_radius` function hardcodes matching for `prov_1`/`prov_2`, which mismatch the seeded `prv_ac_1`/`prv_ac_2` IDs. This forces the 5km check to always return empty.
+2. **Missing Dispute Endpoint**: `test_scenarios.py` calls `/api/dispute`, but the endpoint does not exist in `main.py` (leading to a 404 error during tests).
+3. **Firestore Composite Index Vulnerability**: The `get_last_job` query in `firebase_client.py` orders by `timestamp` on a filtered query. If composite indexes are not pre-configured in the user's Firebase console, this query will throw an active exception.
+
+We will create a `test_scenarios/` directory containing unit tests, end-to-end integration tests, and a connection validator.
+
+## User Review Required
+> [!NOTE]
+> We will implement a client-side query filter for `get_last_job` in the Firebase client. This eliminates the dependency on manual Firestore Composite Index creation, guaranteeing that the code runs immediately out-of-the-box for the hackathon judges without failing.
+
+> [!WARNING]
+> Moving `test_scenarios.py` to a subfolder means the run command shifts from `python test_scenarios.py` to `python -m test_scenarios.test_runner` (when run from the root directory) or executing directly inside the directory. We will document both options clearly.
+
+## Open Questions
+There are no open questions. The requirements and codebase paths are fully clear and ready to execute.
+
+---
+
+## Proposed Changes
+
+### [Component 1] Core Bug Fixes & Refactoring
+
+#### [MODIFY] [main.py](file:///e:/Google%20Hackathon/Google-AI-Seekho-Hackathon-/main.py)
+* Add the missing `/api/dispute` HTTP POST endpoint so that the DisputeAgent can be independently queried and tested by both the test runner and the Flutter frontend.
+
+#### [MODIFY] [firebase_client.py](file:///e:/Google%20Hackathon/Google-AI-Seekho-Hackathon-/database/firebase_client.py)
+* Rewrite `get_last_job` to query for the provider's jobs and sort them in Python memory, preventing crashing due to missing Firestore composite indexes.
+
+#### [MODIFY] [discovery_agent.py](file:///e:/Google%20Hackathon/Google-AI-Seekho-Hackathon-/agents/discovery_agent.py)
+* Fix `_filter_by_radius` to correctly match the seeded provider IDs (`prv_ac_1`, `prv_ac_2`, etc.) and calculate distance dynamically based on user coordinate proximity.
+
+---
+
+### [Component 2] Dedicated Test Scenarios Suite
+
+#### [NEW] [test_agents.py](file:///e:/Google%20Hackathon/Google-AI-Seekho-Hackathon-/test_scenarios/test_agents.py)
+* Individual unit/integration tests for each of the 10 agents in isolation to verify status outputs, intent parses, and pricing breakdown correctness.
+
+#### [NEW] [test_connection.py](file:///e:/Google%20Hackathon/Google-AI-Seekho-Hackathon-/test_scenarios/test_connection.py)
+* Verifies that the FastAPI routes (`/api/request`, `/api/dispute`, `/ws/trace`) are fully operational and reachable.
+
+#### [NEW] [test_runner.py](file:///e:/Google%20Hackathon/Google-AI-Seekho-Hackathon-/test_scenarios/test_runner.py)
+* Consolidated script that runs all test scenarios sequentially and outputs a beautiful, readable terminal report.
+
+#### [DELETE] [test_scenarios.py](file:///e:/Google%20Hackathon/Google-AI-Seekho-Hackathon-/test_scenarios.py)
+* Delete the outdated, top-level testing script.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+* Run `python -m test_scenarios.test_runner` to execute all tests:
+  * Unit tests for each of the 10 agents
+  * REST API tests (`/api/request` & `/api/dispute`)
+  * Live WebSockets trace streams (`/ws/trace`)
+* Confirm all tests return green and database reads/writes occur without exceptions.
+
+### Manual Verification
+* Ensure the FastAPI reload log is clean.
+* Send an ambiguity location request (`DHA`) to verify the geo-normalization halt loop is working properly.
+* Send a rating of `1` or `2` to verify the dispute resolution pipeline triggers seamlessly.
