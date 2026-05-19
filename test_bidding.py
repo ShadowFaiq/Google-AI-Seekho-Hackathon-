@@ -72,9 +72,9 @@ def run_tests():
     booking_id = final_ctx.get("booking_id")
     
     if booking_id:
-        print(f"\n✅ SUCCESS! Booking locked. ID: {booking_id}")
+        print(f"\n[SUCCESS] Booking locked. ID: {booking_id}")
     else:
-        print("\n❌ ERROR: Booking failed.")
+        print("\n[ERROR] Booking failed.")
 
 if __name__ == "__main__":
     run_tests()
