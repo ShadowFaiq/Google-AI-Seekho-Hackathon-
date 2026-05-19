@@ -4,6 +4,7 @@ import asyncio
 import traceback
 import time
 from datetime import datetime
+import uuid
 
 from database.firebase_client import db
 from baseline_engine import BaselineEngine
@@ -17,6 +18,8 @@ from agents.booking_agent import BookingAgent
 from agents.notification_agent import NotificationAgent
 from agents.service_lifecycle_agent import ServiceLifecycleAgent
 from agents.dispute_agent import DisputeAgent
+
+from auth import verify_token, get_password_hash, verify_password, create_access_token
 
 app = FastAPI(title="FikrFree Antigravity API")
 
@@ -39,11 +42,29 @@ class BidAcceptRequest(BaseModel):
     user_id: str
     provider_id: str
     accepted_price: float
-# Mock Auth
-def verify_provider_token(authorization: str = Header(None)):
-    if not authorization or "Bearer mock_token" not in authorization:
-        raise HTTPException(status_code=401, detail="Unauthorized Provider")
-    return True
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class ProviderRegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    service_category: str
+    base_hourly_rate: float
+
+# Real Auth with Mock fallback for Hackathon backward compatibility
+def verify_provider_token(token_data: dict = Depends(verify_token)):
+    if token_data.get("role") != "provider":
+        raise HTTPException(status_code=403, detail="Access denied. Providers only.")
+    return token_data
 
 class TraceEmitter:
     def __init__(self, websocket: WebSocket = None, req_id: str = None):
@@ -169,6 +190,75 @@ class Orchestrator:
             await self.ws_trace.emit("DisputeAgent", ctx, start_time)
             
         return ctx
+
+# --- Authentication Endpoints ---
+
+@app.post("/api/auth/register")
+async def register_user(req: RegisterRequest):
+    existing_user = db.get_user_by_email(req.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    user_id = f"usr_{uuid.uuid4().hex[:6]}"
+    hashed_password = get_password_hash(req.password)
+    
+    user_data = {
+        "id": user_id,
+        "name": req.name,
+        "email": req.email,
+        "phone": req.phone,
+        "hashed_password": hashed_password,
+        "role": "customer"
+    }
+    
+    db.create_user(user_data)
+    token = create_access_token({"sub": user_id, "email": req.email, "role": "customer"})
+    return {"status": "success", "token": token, "user": {"id": user_id, "name": req.name, "email": req.email}}
+
+@app.post("/api/auth/login")
+async def login_user(req: LoginRequest):
+    user = db.get_user_by_email(req.email)
+    if not user or not verify_password(req.password, user.get("hashed_password", "")):
+        raise HTTPException(status_code=400, detail="Invalid email or password")
+    
+    token = create_access_token({"sub": user["id"], "email": user["email"], "role": user.get("role", "customer")})
+    return {"status": "success", "token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
+
+@app.post("/api/provider/register")
+async def register_provider(req: ProviderRegisterRequest):
+    existing_provider = db.get_provider_by_email(req.email)
+    if existing_provider:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    provider_id = f"prv_{uuid.uuid4().hex[:6]}"
+    hashed_password = get_password_hash(req.password)
+    
+    provider_data = {
+        "id": provider_id,
+        "name": req.name,
+        "email": req.email,
+        "hashed_password": hashed_password,
+        "service_category": req.service_category,
+        "base_hourly_rate": req.base_hourly_rate,
+        "role": "provider",
+        "is_active": True,
+        "rating": 5.0,
+        "strikes": 0,
+        "cancellation_rate": 0
+    }
+    
+    db.create_provider(provider_data)
+    token = create_access_token({"sub": provider_id, "email": req.email, "role": "provider"})
+    return {"status": "success", "token": token, "provider": {"id": provider_id, "name": req.name, "email": req.email}}
+
+@app.post("/api/provider/login")
+async def login_provider(req: LoginRequest):
+    provider = db.get_provider_by_email(req.email)
+    if not provider or not verify_password(req.password, provider.get("hashed_password", "")):
+        raise HTTPException(status_code=400, detail="Invalid email or password")
+    
+    token = create_access_token({"sub": provider["id"], "email": provider["email"], "role": "provider"})
+    return {"status": "success", "token": token, "provider": {"id": provider["id"], "name": provider["name"], "email": provider["email"]}}
 
 @app.post("/api/request")
 async def submit_request(req: ServiceRequest):
