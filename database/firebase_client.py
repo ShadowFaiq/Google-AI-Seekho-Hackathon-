@@ -110,7 +110,8 @@ class FirebaseDB:
         return [doc.to_dict() for doc in docs]
     
     def get_provider(self, provider_id: str) -> Any:
-        if not self.db: return None
+        if not self.db:
+            return self.temp_providers.get(provider_id)
         doc = self.db.collection('providers').document(provider_id).get()
         return doc.to_dict() if doc.exists else None
 

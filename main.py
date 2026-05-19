@@ -65,6 +65,15 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+def safe_print(text: str):
+    try:
+        print(text)
+    except Exception:
+        try:
+            print(text.encode('ascii', 'ignore').decode('ascii'))
+        except Exception:
+            pass
+
 def send_fcm_notification(user_id: str, title: str, body: str, data: dict = None):
     # Try to fetch from database
     user = db.get_user(user_id) or db.get_provider(user_id)
@@ -75,7 +84,7 @@ def send_fcm_notification(user_id: str, title: str, body: str, data: dict = None
         token = db.temp_device_tokens.get(user_id)
 
     if not token:
-        print(f"[PUSH SIMULATION] Target: {user_id} | Title: {title} | Body: {body} (Reason: No device token registered)")
+        safe_print(f"[PUSH SIMULATION] Target: {user_id} | Title: {title} | Body: {body} (Reason: No device token registered)")
         return False
     try:
         message = messaging.Message(
@@ -87,10 +96,10 @@ def send_fcm_notification(user_id: str, title: str, body: str, data: dict = None
             data=data or {}
         )
         response = messaging.send(message)
-        print(f"[PUSH SUCCESS] Sent FCM message to {user_id}: {response}")
+        safe_print(f"[PUSH SUCCESS] Sent FCM message to {user_id}: {response}")
         return True
     except Exception as e:
-        print(f"[PUSH ERROR] Failed to send FCM message to {user_id}: {e}")
+        safe_print(f"[PUSH ERROR] Failed to send FCM message to {user_id}: {e}")
         return False
 
 try:
@@ -105,7 +114,7 @@ def send_sms_notification(to_phone: str, message: str) -> bool:
     from_number = os.getenv("TWILIO_FROM_NUMBER")
     
     if not TwilioClient or not account_sid or not auth_token or not from_number:
-        print(f"[SMS SIMULATION] To: {to_phone} | Message: {message} (Reason: Twilio credentials not set or package missing)")
+        safe_print(f"[SMS SIMULATION] To: {to_phone} | Message: {message} (Reason: Twilio credentials not set or package missing)")
         return False
         
     try:
@@ -115,10 +124,10 @@ def send_sms_notification(to_phone: str, message: str) -> bool:
             from_=from_number,
             to=to_phone
         )
-        print(f"[SMS SUCCESS] Message SID: {msg.sid}")
+        safe_print(f"[SMS SUCCESS] Message SID: {msg.sid}")
         return True
     except Exception as e:
-        print(f"[SMS ERROR] Failed to send Twilio message: {e}")
+        safe_print(f"[SMS ERROR] Failed to send Twilio message: {e}")
         return False
 
 class ServiceRequest(BaseModel):
