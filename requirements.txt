@@ -1,0 +1,33 @@
+# FikrFree Backend — Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core API Framework
+fastapi==0.136.1
+uvicorn==0.47.0
+pydantic==2.13.4
+
+# Google AI
+google-genai==2.3.0
+
+# Firebase / Firestore
+firebase-admin==7.4.0
+
+# Google Maps (Scheduling Agent ETA)
+googlemaps==4.10.0
+
+# Environment Variables
+python-dotenv==1.2.2
+
+# HTTP client (for test_scenarios.py)
+requests==2.34.2
+
+# WebSocket client (for test_scenarios.py)
+websockets==16.0
+
+# Authentication
+pyjwt>=2.10.1
+passlib[bcrypt]==1.7.4
+bcrypt==4.1.2
+
+# SMS Gateway
+twilio==9.3.4

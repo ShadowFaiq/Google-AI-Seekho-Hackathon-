@@ -1,0 +1,44 @@
+# Implementation Plan: Google Maps API Integration
+
+Upgrading from mock straight-line distance to real-time traffic data using Google Maps will heavily boost your "Matching Quality" score for the judges. This plan details exactly how we will integrate the Google Maps Distance Matrix and Geocoding APIs into the KaamConnect Backend.
+
+## User Review Required
+
+> [!IMPORTANT]
+> Please review this integration plan. Once you generate the Google Maps API Key from your Google Cloud Console, let me know. I can then begin refactoring the AI code to replace our mock math with live traffic data!
+
+---
+
+## Phase 1: GCP Setup (Your Task)
+1. Log into the Google Cloud Console using the account with the $5 credit.
+2. Search for and **Enable** these two APIs:
+   - **Distance Matrix API** (Calculates drive time and road distance between providers and clients).
+   - **Geocoding API** (Turns text like "G-13, Islamabad" into Lat/Lng coordinates).
+3. Go to **APIs & Services > Credentials**.
+4. Click **Create Credentials > API Key**.
+5. Save this key. *Do not commit it to GitHub.* You will add it to a `.env` file in the Python backend.
+
+## Phase 2: Backend Python Setup (My Task)
+1. **Dependencies:** Install the official Python SDK: `pip install googlemaps python-dotenv`.
+2. **Environment Variables:** Create a `.env` file and securely load `GOOGLE_MAPS_API_KEY` into `main.py`.
+
+## Phase 3: Upgrading the AI Brain (My Task)
+
+### 1. Refactoring `ranking_agent.py`
+Currently, the `calculate_distance()` function uses a simple Euclidean math formula. I will replace it with:
+```python
+def calculate_real_distance(client_loc, provider_loc):
+    # Calls Google Distance Matrix API
+    # Returns actual road distance (km) AND real-time drive duration (minutes)
+```
+- **New Ranking Logic:** The 6-factor matrix will now heavily prioritize **ETA (Estimated Time of Arrival)** rather than just physical distance. Provider A might be physically further away, but if Provider B is stuck in traffic, Provider A gets the higher score.
+
+### 2. Upgrading `intent_agent.py` (Geocoding)
+If the user inputs *"Mujhe F-7/2 Islamabad mein plumber chahiye"*, the Intent Agent will extract "F-7/2 Islamabad". 
+- We will add a Geocoding step that passes this text to Google Maps to grab the exact Lat/Lng coordinates, so we don't have to rely entirely on the phone's GPS button.
+
+### 3. Refactoring `pricing_agent.py`
+Currently, the pricing formula calculates distance surcharges based on the straight line. We will update the formula to use the **actual road kilometers** returned from the Distance Matrix API to ensure the dynamic pricing is highly accurate.
+
+## Phase 4: Frontend App Updates (Anum & Eman)
+- Anum and Eman will no longer need to worry about manually calculating distances on the phone. They just need to ensure that their apps successfully send the user's GPS coordinates (`lat`, `lng`) to the backend API (`/api/request`), and the Python backend will handle all the complex map logic.

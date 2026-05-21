@@ -1,0 +1,57 @@
+# ============================================================
+# FikrFree — .gitignore
+# ============================================================
+
+# --- Secrets & API Keys (NEVER COMMIT THESE) ---
+.env
+.env.*
+*.env
+serviceAccountKey.json
+*firebase-adminsdk*.json
+*service-account*.json
+google-services.json        # Flutter Firebase config
+GoogleService-Info.plist    # Flutter iOS Firebase config
+
+# --- Python Virtual Environment ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Python Cache ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pycache
+
+# --- Build Artifacts ---
+*.egg-info/
+dist/
+build/
+*.egg
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.suo
+*.user
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Flutter ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.apk
+*.aab
+*.ipa
